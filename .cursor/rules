@@ -1,0 +1,153 @@
+# Investment Data Stream Service - Cursor AI Rules
+
+## Project Overview
+
+This is a Spring Boot 3.x application for real-time investment data streaming using T-Invest API, PostgreSQL, and gRPC. The service processes market data, calculates price deviations, and provides analytics endpoints.
+
+## Main Application Class
+
+The main application class is `com.example.investmentdatastreamservice.InvestmentDataStreamService`
+
+## Technology Stack
+
+- **Framework**: Spring Boot 3.5.4, Java 21
+- **Database**: PostgreSQL with JPA/Hibernate
+- **API Integration**: T-Invest Java SDK (gRPC)
+- **Build Tool**: Maven
+- **Lombok**: For reducing boilerplate code
+
+## Architecture Patterns
+
+- **Microservice Architecture**: REST API with streaming data processing
+- **Repository Pattern**: JPA repositories for data access
+- **Service Layer**: Business logic separation
+- **DTO Pattern**: Data transfer objects for API responses
+- **Composite Key Pattern**: For time-series data entities
+
+## Coding Standards
+
+### Java Code Style
+
+- Use Java 21 features (records, pattern matching, text blocks)
+- Follow Spring Boot conventions and annotations
+- Use Lombok annotations (@Data, @Entity, @Repository, @Service, @RestController)
+- Implement proper exception handling with @ControllerAdvice
+- Use @Transactional for database operations
+- Apply @Valid for request validation
+
+### Package Structure
+
+```
+com.example.investmentdatastreamservice/
+├── config/          # Configuration classes
+├── controller/      # REST controllers
+├── dto/            # Data transfer objects
+├── entity/         # JPA entities
+├── repository/     # Data repositories
+└── service/        # Business logic services
+```
+
+### Database Design
+
+- Use composite keys for time-series data (LastPriceKey, ClosePriceKey)
+- Implement proper indexing for performance
+- Use schema separation (invest schema)
+- Apply connection pooling with HikariCP
+
+### API Integration
+
+- Use official T-Invest Java SDK only
+- Implement proper gRPC streaming with StreamObserver
+- Handle connection failures and reconnection logic
+- Apply rate limiting and error handling
+- Use async processing for high-throughput scenarios
+
+### Performance Considerations
+
+- Implement batch processing for database operations
+- Use synchronized collections for thread-safe operations
+- Apply connection pooling (max 20 connections)
+- Monitor latency metrics for streaming data
+- Use scheduled executors for periodic tasks
+
+### Testing Requirements
+
+- Write unit tests for all services and controllers
+- Use @SpringBootTest for integration tests
+- Mock external API calls (T-Invest)
+- Test database operations with @DataJpaTest
+- Implement performance tests for streaming scenarios
+
+### Security Guidelines
+
+- Never expose API tokens in logs or code
+- Use environment variables for sensitive configuration
+- Implement proper input validation
+- Apply SQL injection prevention through JPA
+- Use HTTPS in production environments
+
+### Error Handling
+
+- Implement global exception handling
+- Log errors with appropriate levels
+- Provide meaningful error messages to clients
+- Handle gRPC connection failures gracefully
+- Implement retry mechanisms for transient failures
+
+### Configuration Management
+
+- Use application.properties for environment-specific settings
+- Externalize database credentials
+- Configure timezone settings (Europe/Moscow)
+- Set up proper logging levels
+- Use profiles for different environments
+
+### Code Quality
+
+- Maintain >90% test coverage
+- Use meaningful variable and method names
+- Add Javadoc for public APIs
+- Follow SOLID principles
+- Implement proper logging with SLF4J
+
+### Deployment Considerations
+
+- Use Docker for containerization
+- Configure health checks
+- Set up monitoring and metrics
+- Implement graceful shutdown
+- Use environment-specific configurations
+
+## Development Workflow
+
+1. Create feature branches from main
+2. Write tests before implementation
+3. Follow code review process
+4. Run full test suite before merge
+5. Update documentation as needed
+
+## Common Patterns
+
+- Use @PostConstruct for initialization
+- Implement @PreDestroy for cleanup
+- Apply @Async for non-blocking operations
+- Use @Cacheable for frequently accessed data
+- Implement @EventListener for domain events
+
+## Performance Monitoring
+
+- Track streaming latency metrics
+- Monitor database connection pool
+- Log batch processing statistics
+- Measure API response times
+- Track memory usage patterns
+
+## Integration Guidelines
+
+- Use T-Invest API for market data only
+- Implement proper subscription management
+- Handle API rate limits gracefully
+- Cache frequently accessed reference data
+- Use async processing for data streams
+
+Remember: This service handles real-time financial data, so reliability, performance, and data accuracy are critical. Always test thoroughly and monitor production metrics.
