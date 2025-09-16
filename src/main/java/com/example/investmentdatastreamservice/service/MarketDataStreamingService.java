@@ -5,7 +5,10 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -15,24 +18,33 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import com.example.investmentdatastreamservice.entity.CandleEntity;
 import com.example.investmentdatastreamservice.entity.TradeEntity;
+// removed unused CandleRepository
 import com.example.investmentdatastreamservice.repository.FutureRepository;
+import com.example.investmentdatastreamservice.repository.IndicativeRepository;
 import com.example.investmentdatastreamservice.repository.ShareRepository;
-import com.example.investmentdatastreamservice.repository.TradeBatchRepository;
+// removed unused TradeBatchRepository
 import io.grpc.stub.StreamObserver;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import ru.tinkoff.piapi.contract.v1.Candle;
+import ru.tinkoff.piapi.contract.v1.CandleInstrument;
 import ru.tinkoff.piapi.contract.v1.LastPrice;
 import ru.tinkoff.piapi.contract.v1.LastPriceInstrument;
 import ru.tinkoff.piapi.contract.v1.MarketDataRequest;
 import ru.tinkoff.piapi.contract.v1.MarketDataResponse;
 import ru.tinkoff.piapi.contract.v1.MarketDataStreamServiceGrpc;
+import ru.tinkoff.piapi.contract.v1.SubscribeCandlesRequest;
 import ru.tinkoff.piapi.contract.v1.SubscribeLastPriceRequest;
 import ru.tinkoff.piapi.contract.v1.SubscribeLastPriceResponse;
 import ru.tinkoff.piapi.contract.v1.SubscribeTradesRequest;
 import ru.tinkoff.piapi.contract.v1.SubscribeTradesResponse;
 import ru.tinkoff.piapi.contract.v1.SubscriptionAction;
+import ru.tinkoff.piapi.contract.v1.SubscriptionInterval;
 import ru.tinkoff.piapi.contract.v1.Trade;
 import ru.tinkoff.piapi.contract.v1.TradeDirection;
 
@@ -58,9 +70,14 @@ public class MarketDataStreamingService {
                                                                  // вставок
 
     private final MarketDataStreamServiceGrpc.MarketDataStreamServiceStub streamStub;
-    private final TradeBatchRepository tradeBatchRepository;
+    // removed: private final TradeBatchRepository tradeBatchRepository;
     private final ShareRepository shareRepository;
     private final FutureRepository futureRepository;
+    private final IndicativeRepository indicativeRepository;
+    // removed: private final CandleRepository candleRepository; // оставляем для чтения при
+    // необходимости
+    // removed: private final JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate streamJdbcTemplate;
 
     // Неблокирующие структуры данных для прямых вставок
     private final ExecutorService tradeInsertExecutor =
@@ -76,16 +93,43 @@ public class MarketDataStreamingService {
     private final AtomicLong totalTradeErrors = new AtomicLong(0);
     private final AtomicLong totalReceived = new AtomicLong(0);
     private final AtomicLong totalTradeReceived = new AtomicLong(0);
+    private final AtomicLong totalTradeInserted = new AtomicLong(0);
+    private final AtomicLong totalCandleReceived = new AtomicLong(0);
+    private final AtomicLong totalCandleInserted = new AtomicLong(0);
+    private final AtomicLong totalCandleReceivedShares = new AtomicLong(0);
+    private final AtomicLong totalCandleReceivedFutures = new AtomicLong(0);
+    private final AtomicLong totalCandleReceivedIndicatives = new AtomicLong(0);
+
+    // Отдельные счетчики для LastPrice
+    private final AtomicLong totalLastPriceReceived = new AtomicLong(0);
+    private final AtomicLong totalLastPriceProcessed = new AtomicLong(0);
+    private final AtomicLong totalLastPriceInserted = new AtomicLong(0);
+
+    // Детализированные счетчики LastPrice по типам инструментов
+    private final AtomicLong totalLastPriceReceivedShares = new AtomicLong(0);
+    private final AtomicLong totalLastPriceReceivedFutures = new AtomicLong(0);
+    private final AtomicLong totalLastPriceReceivedIndicatives = new AtomicLong(0);
+
+    // Детализированные счетчики Trades по типам инструментов
+    private final AtomicLong totalTradeReceivedShares = new AtomicLong(0);
+    private final AtomicLong totalTradeReceivedFutures = new AtomicLong(0);
+    private final AtomicLong totalTradeReceivedIndicatives = new AtomicLong(0);
+
+    private volatile Set<String> shareFigisCache = Collections.emptySet();
+    private volatile Set<String> futureFigisCache = Collections.emptySet();
+    private volatile Set<String> indicativeFigisCache = Collections.emptySet();
     private volatile StreamObserver<MarketDataRequest> requestObserver;
 
     public MarketDataStreamingService(
             MarketDataStreamServiceGrpc.MarketDataStreamServiceStub streamStub,
-            TradeBatchRepository tradeBatchRepository, ShareRepository shareRepository,
-            FutureRepository futureRepository) {
+            ShareRepository shareRepository, FutureRepository futureRepository,
+            IndicativeRepository indicativeRepository,
+            @Qualifier("streamJdbcTemplate") JdbcTemplate streamJdbcTemplate) {
         this.streamStub = streamStub;
-        this.tradeBatchRepository = tradeBatchRepository;
         this.shareRepository = shareRepository;
         this.futureRepository = futureRepository;
+        this.indicativeRepository = indicativeRepository;
+        this.streamJdbcTemplate = streamJdbcTemplate;
     }
 
     /**
@@ -153,18 +197,38 @@ public class MarketDataStreamingService {
 
         tradeInsertExecutor.submit(() -> {
             try {
-                // Выполняем вставку одной записи
-                tradeBatchRepository.upsertBatch(List.of(entity));
-                totalTradeProcessed.incrementAndGet();
+                final String sql = "INSERT INTO invest.trades "
+                        + "(figi, time, direction, price, quantity, currency, exchange, trade_source, trade_direction) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                        + "ON CONFLICT (figi, time, direction) DO UPDATE SET "
+                        + "price = EXCLUDED.price, quantity = EXCLUDED.quantity, "
+                        + "currency = EXCLUDED.currency, exchange = EXCLUDED.exchange, "
+                        + "trade_source = EXCLUDED.trade_source, trade_direction = EXCLUDED.trade_direction";
+
+                java.sql.Timestamp ts = java.sql.Timestamp.valueOf(entity.getId().getTime());
+
+                streamJdbcTemplate.update(sql, entity.getId().getFigi(), ts,
+                        entity.getId().getDirection(), entity.getPrice(), entity.getQuantity(),
+                        entity.getCurrency(), entity.getExchange(), entity.getTradeSource(),
+                        entity.getTradeDirection());
+
+                // Разделяем счетчики по типу данных
+                if ("LAST_PRICE".equals(entity.getId().getDirection())) {
+                    totalLastPriceProcessed.incrementAndGet();
+                    totalLastPriceInserted.incrementAndGet();
+                } else {
+                    totalTradeProcessed.incrementAndGet();
+                    totalTradeInserted.incrementAndGet();
+                }
 
                 if (log.isDebugEnabled()) {
-                    log.debug("Successfully inserted trade for {} at {}: {} {}",
-                            entity.getId().getFigi(), entity.getId().getTime(), entity.getPrice(),
+                    log.debug("Upserted trade for {} at {}: {} {}", entity.getId().getFigi(),
+                            entity.getId().getTime(), entity.getPrice(),
                             entity.getId().getDirection());
                 }
             } catch (Exception e) {
                 totalTradeErrors.incrementAndGet();
-                log.error("Error inserting trade for {}", entity.getId().getFigi(), e);
+                log.error("Error upserting trade for {}", entity.getId().getFigi(), e);
             } finally {
                 tradeInsertSemaphore.release();
             }
@@ -181,19 +245,27 @@ public class MarketDataStreamingService {
     private List<String> getAllInstruments() {
         log.info("Starting to load FIGI instruments for subscription...");
 
-        // Загружаем акции
-        List<String> sharesFigis = shareRepository.findAllDistinctFigi();
-        log.info("Loaded {} shares from shares table", sharesFigis.size());
+        // Загружаем акции (исключаем пустые FIGI)
+        List<String> sharesFigis = shareRepository.findAllDistinctFigi().stream()
+                .filter(figi -> figi != null && !figi.trim().isEmpty()).toList();
+        log.info("Loaded {} shares from shares table (filtered empty FIGI)", sharesFigis.size());
 
-        // Загружаем все фьючерсы
-        List<String> allFuturesFigis = futureRepository.findAllFigis();
-        log.info("Loaded {} total futures from futures table", allFuturesFigis.size());
+        // Загружаем все фьючерсы (исключаем пустые FIGI)
+        List<String> allFuturesFigis = futureRepository.findAllFigis().stream()
+                .filter(figi -> figi != null && !figi.trim().isEmpty()).toList();
+        log.info("Loaded {} total futures from futures table (filtered empty FIGI)",
+                allFuturesFigis.size());
 
-        // Дополнительно загружаем фьючерсы по типам для детального логирования
-        List<String> futuresSecurity = futureRepository.findFigisByAssetType("TYPE_SECURITY");
-        List<String> futuresCurrency = futureRepository.findFigisByAssetType("TYPE_CURRENCY");
-        List<String> futuresCommodity = futureRepository.findFigisByAssetType("TYPE_COMMODITY");
-        List<String> futuresIndex = futureRepository.findFigisByAssetType("TYPE_INDEX");
+        // Дополнительно загружаем фьючерсы по типам для детального логирования (исключаем пустые
+        // FIGI)
+        List<String> futuresSecurity = futureRepository.findFigisByAssetType("TYPE_SECURITY")
+                .stream().filter(figi -> figi != null && !figi.trim().isEmpty()).toList();
+        List<String> futuresCurrency = futureRepository.findFigisByAssetType("TYPE_CURRENCY")
+                .stream().filter(figi -> figi != null && !figi.trim().isEmpty()).toList();
+        List<String> futuresCommodity = futureRepository.findFigisByAssetType("TYPE_COMMODITY")
+                .stream().filter(figi -> figi != null && !figi.trim().isEmpty()).toList();
+        List<String> futuresIndex = futureRepository.findFigisByAssetType("TYPE_INDEX").stream()
+                .filter(figi -> figi != null && !figi.trim().isEmpty()).toList();
 
         log.info("Futures breakdown by type:");
         log.info("  - TYPE_SECURITY: {} instruments", futuresSecurity.size());
@@ -201,16 +273,31 @@ public class MarketDataStreamingService {
         log.info("  - TYPE_COMMODITY: {} instruments", futuresCommodity.size());
         log.info("  - TYPE_INDEX: {} instruments", futuresIndex.size());
 
-        // Объединяем акции и фьючерсы
+        // Загружаем индикативные инструменты (исключаем пустые FIGI)
+        List<String> indicativesFigis = indicativeRepository.findAllDistinctFigi().stream()
+                .filter(figi -> figi != null && !figi.trim().isEmpty()).toList();
+        log.info("Loaded {} indicatives from indicatives table (filtered empty FIGI)",
+                indicativesFigis.size());
+
+        // Объединяем акции, фьючерсы и индикативные инструменты
         List<String> allFigis = new ArrayList<>();
         allFigis.addAll(sharesFigis);
         allFigis.addAll(allFuturesFigis);
+        allFigis.addAll(indicativesFigis);
+
+        // refresh caches for categorization
+        this.shareFigisCache = new HashSet<>(sharesFigis);
+        this.futureFigisCache = new HashSet<>(allFuturesFigis);
+        this.indicativeFigisCache = new HashSet<>(indicativesFigis);
 
         // Детальное логирование
         log.info("=== SUBSCRIPTION INSTRUMENTS SUMMARY ===");
         log.info("Total instruments loaded: {}", allFigis.size());
         log.info("Shares: {} instruments", sharesFigis.size());
         log.info("Futures total: {} instruments", allFuturesFigis.size());
+        log.info("Indicatives: {} instruments (no candles support)", indicativesFigis.size());
+        log.info("Candles subscription: {} instruments (shares + futures only)",
+                sharesFigis.size() + allFuturesFigis.size());
         log.info("Futures breakdown by type:");
         log.info("  - TYPE_SECURITY: {} instruments", futuresSecurity.size());
         log.info("  - TYPE_CURRENCY: {} instruments", futuresCurrency.size());
@@ -226,6 +313,10 @@ public class MarketDataStreamingService {
         if (!allFuturesFigis.isEmpty()) {
             log.debug("Sample futures FIGIs: {}",
                     allFuturesFigis.subList(0, Math.min(5, allFuturesFigis.size())));
+        }
+        if (!indicativesFigis.isEmpty()) {
+            log.debug("Sample indicatives FIGIs: {}",
+                    indicativesFigis.subList(0, Math.min(5, indicativesFigis.size())));
         }
 
         return allFigis;
@@ -273,6 +364,34 @@ public class MarketDataStreamingService {
                                     .toList())
                             .build();
 
+            // Подписываемся на минутные свечи (только для акций и фьючерсов)
+            // Индикативные инструменты (индексы) не поддерживают свечи
+            List<String> candleInstruments = new ArrayList<>();
+
+            // Получаем акции для свечей
+            List<String> sharesForCandles = shareRepository.findAllDistinctFigi().stream()
+                    .filter(figi -> figi != null && !figi.trim().isEmpty()).toList();
+
+            // Получаем фьючерсы для свечей
+            List<String> futuresForCandles = futureRepository.findAllFigis().stream()
+                    .filter(figi -> figi != null && !figi.trim().isEmpty()).toList();
+
+            candleInstruments.addAll(sharesForCandles);
+            candleInstruments.addAll(futuresForCandles);
+
+            log.info(
+                    "Creating Candles subscription request for {} instruments (shares + futures only)",
+                    candleInstruments.size());
+            SubscribeCandlesRequest candlesReq = SubscribeCandlesRequest.newBuilder()
+                    .setSubscriptionAction(SubscriptionAction.SUBSCRIPTION_ACTION_SUBSCRIBE)
+                    .addAllInstruments(candleInstruments.stream()
+                            .map(f -> CandleInstrument.newBuilder().setInstrumentId(f)
+                                    .setInterval(
+                                            SubscriptionInterval.SUBSCRIPTION_INTERVAL_ONE_MINUTE)
+                                    .build())
+                            .toList())
+                    .build();
+
             // Отправляем подписку на цены последних сделок
             log.info("Building LastPrice subscription request");
             MarketDataRequest lastPriceSubscribeReq = MarketDataRequest.newBuilder()
@@ -282,6 +401,11 @@ public class MarketDataStreamingService {
             log.info("Building Trades subscription request");
             MarketDataRequest tradesSubscribeReq =
                     MarketDataRequest.newBuilder().setSubscribeTradesRequest(tradesReq).build();
+
+            // Отправляем подписку на минутные свечи
+            log.info("Building Candles subscription request");
+            MarketDataRequest candlesSubscribeReq =
+                    MarketDataRequest.newBuilder().setSubscribeCandlesRequest(candlesReq).build();
 
             StreamObserver<MarketDataResponse> responseObserver = new StreamObserver<>() {
                 @Override
@@ -310,14 +434,23 @@ public class MarketDataStreamingService {
                         return;
                     }
 
+                    if (resp.hasSubscribeCandlesResponse()) {
+                        resp.getSubscribeCandlesResponse();
+                        isConnected.set(true);
+                        log.info("=== CANDLES SUBSCRIPTION RESPONSE ===");
+                        log.info("Candles subscription response received");
+                        log.info("=====================================");
+                        return;
+                    }
+
                     if (resp.hasLastPrice()) {
                         log.info("Received last price data from T-Invest API for FIGI: {}",
                                 resp.getLastPrice().getFigi());
                         processLastPrice(resp.getLastPrice());
                     } else if (resp.hasTrade()) {
-                        log.info("Received trade data from T-Invest API for FIGI: {}",
-                                resp.getTrade().getFigi());
                         processTrade(resp.getTrade());
+                    } else if (resp.hasCandle()) {
+                        processCandle(resp.getCandle());
                     } else {
                         log.info("Received unknown response type from T-Invest API: {}", resp);
                     }
@@ -350,7 +483,11 @@ public class MarketDataStreamingService {
             log.info("Sending Trades subscription request to T-Invest API");
             requestObserver.onNext(tradesSubscribeReq);
 
-            log.info("Successfully sent both subscription requests to T-Invest API");
+            // Отправляем подписку на минутные свечи
+            log.info("Sending Candles subscription request to T-Invest API");
+            requestObserver.onNext(candlesSubscribeReq);
+
+            log.info("Successfully sent all subscription requests to T-Invest API");
 
         } catch (Exception e) {
             totalTradeErrors.incrementAndGet();
@@ -364,7 +501,17 @@ public class MarketDataStreamingService {
      */
     private void processTrade(Trade trade) {
         try {
-            totalTradeReceived.incrementAndGet();
+            long r = totalTradeReceived.incrementAndGet();
+
+            // Подсчет Trades по типам инструментов
+            String figi = trade.getFigi();
+            if (shareFigisCache.contains(figi)) {
+                totalTradeReceivedShares.incrementAndGet();
+            } else if (futureFigisCache.contains(figi)) {
+                totalTradeReceivedFutures.incrementAndGet();
+            } else if (indicativeFigisCache.contains(figi)) {
+                totalTradeReceivedIndicatives.incrementAndGet();
+            }
 
             Instant eventInstant =
                     Instant.ofEpochSecond(trade.getTime().getSeconds(), trade.getTime().getNanos());
@@ -387,6 +534,10 @@ public class MarketDataStreamingService {
 
             // Выполняем неблокирующую асинхронную вставку Trade данных
             insertTradeDataAsync(tradeEntity);
+            if (r % 1000 == 0) {
+                log.info("Received trades: {} | Inserted trades: {}", totalTradeReceived.get(),
+                        totalTradeInserted.get());
+            }
 
 
             // Логируем каждую 100-ю запись для мониторинга частоты
@@ -410,11 +561,113 @@ public class MarketDataStreamingService {
     }
 
     /**
+     * Высокопроизводительная обработка данных о минутных свечах
+     */
+    private void processCandle(Candle candle) {
+        try {
+            long rc = totalCandleReceived.incrementAndGet();
+
+            Instant eventInstant = Instant.ofEpochSecond(candle.getTime().getSeconds(),
+                    candle.getTime().getNanos());
+            // Конвертируем время в UTC+3 (московское время)
+            LocalDateTime eventTime = LocalDateTime.ofInstant(eventInstant, ZoneOffset.of("+3"));
+
+            // Конвертируем цены из Quotation в BigDecimal
+            BigDecimal open = convertQuotationToBigDecimal(candle.getOpen());
+            BigDecimal high = convertQuotationToBigDecimal(candle.getHigh());
+            BigDecimal low = convertQuotationToBigDecimal(candle.getLow());
+            BigDecimal close = convertQuotationToBigDecimal(candle.getClose());
+
+            // Создаем CandleEntity для минутной свечи
+            CandleEntity candleEntity = new CandleEntity(candle.getFigi(), eventTime,
+                    candle.getVolume(), high, low, close, open, true, // isComplete - временно
+                                                                      // устанавливаем true
+                    null, // createdAt будет установлен автоматически
+                    null // updatedAt будет установлен автоматически
+            );
+
+            // increment per-category counters
+            String figi = candle.getFigi();
+            if (shareFigisCache.contains(figi)) {
+                totalCandleReceivedShares.incrementAndGet();
+            } else if (futureFigisCache.contains(figi)) {
+                totalCandleReceivedFutures.incrementAndGet();
+            } else if (indicativeFigisCache.contains(figi)) {
+                totalCandleReceivedIndicatives.incrementAndGet();
+            }
+
+            // Выполняем неблокирующую асинхронную вставку Candle данных
+            insertCandleDataAsync(candleEntity);
+            if (rc % 1000 == 0) {
+                log.info("Received candles: {} | Inserted candles: {}", totalCandleReceived.get(),
+                        totalCandleInserted.get());
+            }
+
+            // Логируем каждую 50-ю свечу для мониторинга частоты
+            // per-record logs disabled
+
+            // detailed debug disabled to reduce per-record logging
+
+        } catch (Exception e) {
+            totalTradeErrors.incrementAndGet();
+            log.error("Error processing candle for {}", candle.getFigi(), e);
+        }
+    }
+
+    /**
+     * Конвертирует Quotation в BigDecimal
+     */
+    private BigDecimal convertQuotationToBigDecimal(
+            ru.tinkoff.piapi.contract.v1.Quotation quotation) {
+        return BigDecimal.valueOf(quotation.getUnits())
+                .add(BigDecimal.valueOf(quotation.getNano()).movePointLeft(9));
+    }
+
+    /**
+     * Высокопроизводительная неблокирующая асинхронная вставка Candle данных в базу
+     */
+    private void insertCandleDataAsync(CandleEntity entity) {
+        tradeInsertExecutor.submit(() -> {
+            try {
+                tradeInsertSemaphore.acquire();
+                final String sql =
+                        "INSERT INTO invest.candles (figi, time, volume, high, low, close, open, is_complete) "
+                                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                                + "ON CONFLICT (figi, time) DO UPDATE SET "
+                                + "volume = EXCLUDED.volume, high = EXCLUDED.high, low = EXCLUDED.low, "
+                                + "close = EXCLUDED.close, open = EXCLUDED.open, is_complete = EXCLUDED.is_complete, "
+                                + "updated_at = now()";
+                java.sql.Timestamp ts = java.sql.Timestamp.valueOf(entity.getTime());
+                streamJdbcTemplate.update(sql, entity.getFigi(), ts, entity.getVolume(),
+                        entity.getHigh(), entity.getLow(), entity.getClose(), entity.getOpen(),
+                        Boolean.TRUE.equals(entity.getIsComplete()));
+                totalCandleInserted.incrementAndGet();
+            } catch (Exception e) {
+                totalTradeErrors.incrementAndGet();
+                log.error("Error inserting candle data for {}", entity.getFigi(), e);
+            } finally {
+                tradeInsertSemaphore.release();
+            }
+        });
+    }
+
+    /**
      * Высокопроизводительная обработка данных о последней цене
      */
     private void processLastPrice(LastPrice price) {
         try {
             totalReceived.incrementAndGet();
+            totalLastPriceReceived.incrementAndGet();
+
+            // Подсчет LastPrice по типам инструментов
+            String figi = price.getFigi();
+            if (shareFigisCache.contains(figi)) {
+                totalLastPriceReceivedShares.incrementAndGet();
+            } else if (futureFigisCache.contains(figi)) {
+                totalLastPriceReceivedFutures.incrementAndGet();
+            } else if (indicativeFigisCache.contains(figi)) {
+                totalLastPriceReceivedIndicatives.incrementAndGet();
+            }
 
             Instant eventInstant =
                     Instant.ofEpochSecond(price.getTime().getSeconds(), price.getTime().getNanos());
@@ -424,8 +677,7 @@ public class MarketDataStreamingService {
             BigDecimal priceValue = BigDecimal.valueOf(price.getPrice().getUnits())
                     .add(BigDecimal.valueOf(price.getPrice().getNano()).movePointLeft(9));
 
-            log.info("Processing LastPrice: FIGI={}, Time={}, Price={}", price.getFigi(), eventTime,
-                    priceValue);
+            // aggregated logging only
 
             // Создаем TradeEntity для сохранения в таблицу trades
             TradeEntity tradeEntity = new TradeEntity(price.getFigi(), eventTime, "LAST_PRICE", // Направление
@@ -436,8 +688,7 @@ public class MarketDataStreamingService {
             );
 
             // Выполняем неблокирующую асинхронную вставку в таблицу trades
-            log.info("Sending LastPrice as Trade entity to async insert for FIGI: {}",
-                    price.getFigi());
+            // aggregated logging only
             insertTradeDataAsync(tradeEntity);
 
             // Логируем каждую 100-ю запись для мониторинга частоты
@@ -482,7 +733,14 @@ public class MarketDataStreamingService {
     public ServiceStats getServiceStats() {
         return new ServiceStats(isRunning.get(), isConnected.get(), totalTradeProcessed.get(),
                 totalTradeErrors.get(), totalReceived.get(), totalTradeReceived.get(),
-                tradeInsertSemaphore.availablePermits(), MAX_CONCURRENT_TRADE_INSERTS);
+                tradeInsertSemaphore.availablePermits(), MAX_CONCURRENT_TRADE_INSERTS,
+                totalCandleReceived.get(), totalCandleInserted.get(), totalTradeInserted.get(),
+                totalCandleReceivedShares.get(), totalCandleReceivedFutures.get(),
+                totalCandleReceivedIndicatives.get(), totalLastPriceReceived.get(),
+                totalLastPriceProcessed.get(), totalLastPriceInserted.get(),
+                totalLastPriceReceivedShares.get(), totalLastPriceReceivedFutures.get(),
+                totalLastPriceReceivedIndicatives.get(), totalTradeReceivedShares.get(),
+                totalTradeReceivedFutures.get(), totalTradeReceivedIndicatives.get());
     }
 
     /**
@@ -514,9 +772,36 @@ public class MarketDataStreamingService {
         private final int tradeQueueSize;
         private final int tradeBufferCapacity;
 
+        private final long totalCandleReceived;
+        private final long totalCandleInserted;
+        private final long totalTradeInserted;
+        private final long totalCandleReceivedShares;
+        private final long totalCandleReceivedFutures;
+        private final long totalCandleReceivedIndicatives;
+
+        // LastPrice счетчики
+        private final long totalLastPriceReceived;
+        private final long totalLastPriceProcessed;
+        private final long totalLastPriceInserted;
+        private final long totalLastPriceReceivedShares;
+        private final long totalLastPriceReceivedFutures;
+        private final long totalLastPriceReceivedIndicatives;
+
+        // Trade счетчики по типам инструментов
+        private final long totalTradeReceivedShares;
+        private final long totalTradeReceivedFutures;
+        private final long totalTradeReceivedIndicatives;
+
         public ServiceStats(boolean isRunning, boolean isConnected, long totalTradeProcessed,
                 long totalTradeErrors, long totalReceived, long totalTradeReceived,
-                int tradeQueueSize, int tradeBufferCapacity) {
+                int tradeQueueSize, int tradeBufferCapacity, long totalCandleReceived,
+                long totalCandleInserted, long totalTradeInserted, long totalCandleReceivedShares,
+                long totalCandleReceivedFutures, long totalCandleReceivedIndicatives,
+                long totalLastPriceReceived, long totalLastPriceProcessed,
+                long totalLastPriceInserted, long totalLastPriceReceivedShares,
+                long totalLastPriceReceivedFutures, long totalLastPriceReceivedIndicatives,
+                long totalTradeReceivedShares, long totalTradeReceivedFutures,
+                long totalTradeReceivedIndicatives) {
             this.isRunning = isRunning;
             this.isConnected = isConnected;
             this.totalTradeProcessed = totalTradeProcessed;
@@ -525,6 +810,21 @@ public class MarketDataStreamingService {
             this.totalTradeReceived = totalTradeReceived;
             this.tradeQueueSize = tradeQueueSize;
             this.tradeBufferCapacity = tradeBufferCapacity;
+            this.totalCandleReceived = totalCandleReceived;
+            this.totalCandleInserted = totalCandleInserted;
+            this.totalTradeInserted = totalTradeInserted;
+            this.totalCandleReceivedShares = totalCandleReceivedShares;
+            this.totalCandleReceivedFutures = totalCandleReceivedFutures;
+            this.totalCandleReceivedIndicatives = totalCandleReceivedIndicatives;
+            this.totalLastPriceReceived = totalLastPriceReceived;
+            this.totalLastPriceProcessed = totalLastPriceProcessed;
+            this.totalLastPriceInserted = totalLastPriceInserted;
+            this.totalLastPriceReceivedShares = totalLastPriceReceivedShares;
+            this.totalLastPriceReceivedFutures = totalLastPriceReceivedFutures;
+            this.totalLastPriceReceivedIndicatives = totalLastPriceReceivedIndicatives;
+            this.totalTradeReceivedShares = totalTradeReceivedShares;
+            this.totalTradeReceivedFutures = totalTradeReceivedFutures;
+            this.totalTradeReceivedIndicatives = totalTradeReceivedIndicatives;
         }
 
         public boolean isRunning() {
@@ -551,6 +851,30 @@ public class MarketDataStreamingService {
 
         public long getTotalTradeReceived() {
             return totalTradeReceived;
+        }
+
+        public long getTotalCandleReceived() {
+            return totalCandleReceived;
+        }
+
+        public long getTotalCandleInserted() {
+            return totalCandleInserted;
+        }
+
+        public long getTotalTradeInserted() {
+            return totalTradeInserted;
+        }
+
+        public long getTotalCandleReceivedShares() {
+            return this.totalCandleReceivedShares;
+        }
+
+        public long getTotalCandleReceivedFutures() {
+            return this.totalCandleReceivedFutures;
+        }
+
+        public long getTotalCandleReceivedIndicatives() {
+            return this.totalCandleReceivedIndicatives;
         }
 
 
@@ -582,7 +906,7 @@ public class MarketDataStreamingService {
         }
 
         public long getTotalProcessedAll() {
-            return totalTradeProcessed;
+            return totalTradeInserted + totalCandleInserted;
         }
 
         public long getTotalErrorsAll() {
@@ -590,7 +914,66 @@ public class MarketDataStreamingService {
         }
 
         public long getTotalReceivedAll() {
-            return totalReceived + totalTradeReceived;
+            return totalReceived + totalTradeReceived + totalCandleReceived;
+        }
+
+        // Группировка по типам сообщений от API
+        public long getTotalLastPriceReceived() {
+            return totalLastPriceReceived;
+        }
+
+        public long getTotalLastPriceProcessed() {
+            return totalLastPriceProcessed;
+        }
+
+        public long getTotalLastPriceInserted() {
+            return totalLastPriceInserted;
+        }
+
+        public long getTotalLastPriceReceivedShares() {
+            return totalLastPriceReceivedShares;
+        }
+
+        public long getTotalLastPriceReceivedFutures() {
+            return totalLastPriceReceivedFutures;
+        }
+
+        public long getTotalLastPriceReceivedIndicatives() {
+            return totalLastPriceReceivedIndicatives;
+        }
+
+        public long getTotalTradeReceivedShares() {
+            return totalTradeReceivedShares;
+        }
+
+        public long getTotalTradeReceivedFutures() {
+            return totalTradeReceivedFutures;
+        }
+
+        public long getTotalTradeReceivedIndicatives() {
+            return totalTradeReceivedIndicatives;
+        }
+
+        public long getTotalTradeMessagesReceived() {
+            return totalTradeReceived;
+        }
+
+        public long getTotalCandleMessagesReceived() {
+            return totalCandleReceived;
+        }
+
+        // Группировка по обработанным записям в БД
+        public long getTotalTradesInserted() {
+            return totalTradeInserted;
+        }
+
+        public long getTotalCandlesInserted() {
+            return totalCandleInserted;
+        }
+
+        // Группировка по обработанным сообщениям (включая ошибки)
+        public long getTotalTradesProcessed() {
+            return totalTradeProcessed;
         }
 
         public double getOverallErrorRate() {
