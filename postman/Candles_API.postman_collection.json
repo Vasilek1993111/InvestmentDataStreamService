@@ -1,0 +1,559 @@
+{
+    "info": {
+        "_postman_id": "candles-api-collection",
+        "name": "Investment Data Stream - Candles API",
+        "description": "API для управления подпиской на минутные свечи",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        "_exporter_id": "investment-data-stream-service"
+    },
+    "item": [
+        {
+            "name": "Управление подпиской",
+            "item": [
+                {
+                    "name": "Запустить подписку на свечи",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Response has success field\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData).to.have.property('success');",
+                                    "    pm.expect(jsonData.success).to.be.true;",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/candles/subscription/start",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "candles",
+                                "subscription",
+                                "start"
+                            ]
+                        },
+                        "description": "Запускает подписку на получение минутных свечей в реальном времени для всех акций и фьючерсов из кэша.\n\n**Что происходит:**\n- Подписывается на минутные свечи для всех инструментов\n- Начинает получать данные от T-Invest API\n- Автоматически вычисляет технические показатели\n- Сохраняет свечи в таблицу minute_candles"
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/candles/subscription/start",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "candles",
+                                        "subscription",
+                                        "start"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "cookie": [],
+                            "body": "{\n    \"success\": true,\n    \"message\": \"Подписка на свечи успешно запущена\",\n    \"timestamp\": \"2024-10-21T12:30:00\"\n}"
+                        },
+                        {
+                            "name": "Already Running",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/candles/subscription/start",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "candles",
+                                        "subscription",
+                                        "start"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "cookie": [],
+                            "body": "{\n    \"success\": false,\n    \"error\": \"Подписка на свечи уже активна\",\n    \"timestamp\": \"2024-10-21T12:30:00\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Остановить подписку на свечи",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Subscription stopped\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.success).to.be.true;",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/candles/subscription/stop",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "candles",
+                                "subscription",
+                                "stop"
+                            ]
+                        },
+                        "description": "Останавливает получение минутных свечей в реальном времени.\n\n**Что происходит:**\n- Отправляет запрос на отписку от свечей\n- Останавливает обработку входящих данных\n- Завершает все активные процессы вставки"
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/candles/subscription/stop",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "candles",
+                                        "subscription",
+                                        "stop"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "cookie": [],
+                            "body": "{\n    \"success\": true,\n    \"message\": \"Подписка на свечи успешно остановлена\",\n    \"timestamp\": \"2024-10-21T12:35:00\"\n}"
+                        }
+                    ]
+                }
+            ],
+            "description": "Endpoints для управления подпиской на минутные свечи"
+        },
+        {
+            "name": "Мониторинг",
+            "item": [
+                {
+                    "name": "Получить статус подписки",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Response has status fields\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData).to.have.property('isRunning');",
+                                    "    pm.expect(jsonData).to.have.property('isConnected');",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/candles/subscription/status",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "candles",
+                                "subscription",
+                                "status"
+                            ]
+                        },
+                        "description": "Быстрая проверка статуса подписки на свечи.\n\n**Возвращает:**\n- isRunning - работает ли подписка\n- isConnected - подключено ли к API\n- timestamp - время запроса"
+                    },
+                    "response": [
+                        {
+                            "name": "Running and Connected",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/candles/subscription/status",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "candles",
+                                        "subscription",
+                                        "status"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "cookie": [],
+                            "body": "{\n    \"success\": true,\n    \"isRunning\": true,\n    \"isConnected\": true,\n    \"timestamp\": \"2024-10-21T12:32:00\"\n}"
+                        },
+                        {
+                            "name": "Not Running",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/candles/subscription/status",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "candles",
+                                        "subscription",
+                                        "status"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "cookie": [],
+                            "body": "{\n    \"success\": true,\n    \"isRunning\": false,\n    \"isConnected\": false,\n    \"timestamp\": \"2024-10-21T12:32:00\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Получить статистику подписки",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Response has statistics\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData).to.have.property('totalReceived');",
+                                    "    pm.expect(jsonData).to.have.property('totalInserted');",
+                                    "    pm.expect(jsonData).to.have.property('totalErrors');",
+                                    "    pm.expect(jsonData).to.have.property('insertUtilization');",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/candles/subscription/stats",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "candles",
+                                "subscription",
+                                "stats"
+                            ]
+                        },
+                        "description": "Получить детальную статистику работы подписки на свечи.\n\n**Возвращает:**\n- **isRunning** - статус работы подписки\n- **isConnected** - статус подключения к API\n- **totalReceived** - всего получено свечей\n- **totalInserted** - всего сохранено в БД\n- **totalErrors** - количество ошибок\n- **availableInserts** - доступных слотов для вставки\n- **maxConcurrentInserts** - макс. одновременных вставок\n- **insertUtilization** - утилизация потоков (0.0-1.0)\n- **errorRate** - процент ошибок (0.0-1.0)"
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/candles/subscription/stats",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "candles",
+                                        "subscription",
+                                        "stats"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "cookie": [],
+                            "body": "{\n    \"success\": true,\n    \"isRunning\": true,\n    \"isConnected\": true,\n    \"totalReceived\": 15420,\n    \"totalInserted\": 15418,\n    \"totalErrors\": 2,\n    \"availableInserts\": 185,\n    \"maxConcurrentInserts\": 200,\n    \"insertUtilization\": 0.075,\n    \"errorRate\": 0.00013,\n    \"timestamp\": \"2024-10-21T12:33:00\"\n}"
+                        }
+                    ]
+                }
+            ],
+            "description": "Endpoints для мониторинга работы подписки на свечи"
+        },
+        {
+            "name": "Сценарии использования",
+            "item": [
+                {
+                    "name": "Полный цикл: Запуск → Мониторинг → Остановка",
+                    "item": [
+                        {
+                            "name": "1. Запустить подписку",
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "exec": [
+                                            "pm.test(\"Subscription started\", function () {",
+                                            "    pm.response.to.have.status(200);",
+                                            "    var jsonData = pm.response.json();",
+                                            "    pm.expect(jsonData.success).to.be.true;",
+                                            "});",
+                                            "",
+                                            "// Ждем 2 секунды перед следующим запросом",
+                                            "setTimeout(function(){}, 2000);"
+                                        ],
+                                        "type": "text/javascript"
+                                    }
+                                }
+                            ],
+                            "request": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/candles/subscription/start",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "candles",
+                                        "subscription",
+                                        "start"
+                                    ]
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "2. Проверить статус",
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "exec": [
+                                            "pm.test(\"Service is running\", function () {",
+                                            "    var jsonData = pm.response.json();",
+                                            "    pm.expect(jsonData.isRunning).to.be.true;",
+                                            "});"
+                                        ],
+                                        "type": "text/javascript"
+                                    }
+                                }
+                            ],
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/candles/subscription/status",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "candles",
+                                        "subscription",
+                                        "status"
+                                    ]
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "3. Получить статистику",
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "exec": [
+                                            "pm.test(\"Statistics available\", function () {",
+                                            "    var jsonData = pm.response.json();",
+                                            "    pm.expect(jsonData.totalReceived).to.be.at.least(0);",
+                                            "});"
+                                        ],
+                                        "type": "text/javascript"
+                                    }
+                                }
+                            ],
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/candles/subscription/stats",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "candles",
+                                        "subscription",
+                                        "stats"
+                                    ]
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "4. Остановить подписку",
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "exec": [
+                                            "pm.test(\"Subscription stopped\", function () {",
+                                            "    pm.response.to.have.status(200);",
+                                            "    var jsonData = pm.response.json();",
+                                            "    pm.expect(jsonData.success).to.be.true;",
+                                            "});"
+                                        ],
+                                        "type": "text/javascript"
+                                    }
+                                }
+                            ],
+                            "request": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/candles/subscription/stop",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "candles",
+                                        "subscription",
+                                        "stop"
+                                    ]
+                                }
+                            },
+                            "response": []
+                        }
+                    ],
+                    "description": "Пример полного рабочего цикла с подпиской на свечи"
+                }
+            ]
+        }
+    ],
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8080",
+            "type": "string"
+        }
+    ]
+}

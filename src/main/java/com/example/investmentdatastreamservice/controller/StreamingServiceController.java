@@ -1,5 +1,6 @@
 package com.example.investmentdatastreamservice.controller;
 
+import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,14 +38,78 @@ public class StreamingServiceController {
     }
 
     /**
+     * Запуск стриминга данных
+     * 
+     * <p>
+     * Запускает получение данных в реальном времени от T-Invest API:
+     * </p>
+     * <ul>
+     * <li>LastPrice - цены последних сделок</li>
+     * <li>Trades - обезличенные сделки</li>
+     * </ul>
+     * 
+     * @return HTTP 200 OK при успешном запуске
+     */
+    @PostMapping("/start")
+    public ResponseEntity<Map<String, Object>> startStreaming() {
+        try {
+            streamingService.startStreaming();
+            Map<String, Object> response =
+                    Map.of("success", true, "message", "Стриминг данных успешно запущен",
+                            "timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = Map.of("success", false, "message",
+                    "Ошибка при запуске стриминга: " + e.getMessage(), "timestamp",
+                    java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Остановка стриминга данных
+     * 
+     * <p>
+     * Останавливает получение данных от T-Invest API.
+     * </p>
+     * 
+     * @return HTTP 200 OK при успешной остановке
+     */
+    @PostMapping("/stop")
+    public ResponseEntity<Map<String, Object>> stopStreaming() {
+        try {
+            streamingService.stopStreaming();
+            Map<String, Object> response =
+                    Map.of("success", true, "message", "Стриминг данных успешно остановлен",
+                            "timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = Map.of("success", false, "message",
+                    "Ошибка при остановке стриминга: " + e.getMessage(), "timestamp",
+                    java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
      * Принудительное переподключение к T-Invest API
      * 
      * @return HTTP 200 OK при успешном запросе переподключения
      */
     @PostMapping("/reconnect")
-    public ResponseEntity<Void> forceReconnect() {
-        streamingService.forceReconnect();
-        return ResponseEntity.ok().build();
+    public ResponseEntity<Map<String, Object>> forceReconnect() {
+        try {
+            streamingService.forceReconnect();
+            Map<String, Object> response =
+                    Map.of("success", true, "message", "Переподключение инициировано", "timestamp",
+                            java.time.LocalDateTime.now().toString());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = Map.of("success", false, "message",
+                    "Ошибка при переподключении: " + e.getMessage(), "timestamp",
+                    java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
     }
 
     /**
@@ -150,19 +215,17 @@ public class StreamingServiceController {
 
 
     /**
-     * Статистика, сгруппированная на 4 объекта: общая, lastPrice, trades, candles
+     * Статистика, сгруппированная на 3 объекта: общая, lastPrice, trades
      */
     public static class ObjectStats {
         private final GeneralStats general;
         private final LastPriceStats lastPrice;
         private final TradeStats trades;
-        private final CandleStats candles;
 
         public ObjectStats(ServiceStats stats) {
             this.general = new GeneralStats(stats);
             this.lastPrice = new LastPriceStats(stats);
             this.trades = new TradeStats(stats);
-            this.candles = new CandleStats(stats);
         }
 
         public GeneralStats getGeneral() {
@@ -175,10 +238,6 @@ public class StreamingServiceController {
 
         public TradeStats getTrades() {
             return trades;
-        }
-
-        public CandleStats getCandles() {
-            return candles;
         }
 
         /**
@@ -384,68 +443,5 @@ public class StreamingServiceController {
             }
         }
 
-        /**
-         * Статистика по Candle данным
-         */
-        public static class CandleStats {
-            private final long received;
-            private final long processed;
-            private final long inserted;
-            private final long errors;
-            private final double processingRate;
-            private final double errorRate;
-            private final long receivedShares;
-            private final long receivedFutures;
-            private final long receivedIndicatives;
-
-            public CandleStats(ServiceStats stats) {
-                this.received = stats.getTotalCandleMessagesReceived();
-                this.processed = stats.getTotalCandlesInserted(); // candles сразу вставляются
-                this.inserted = stats.getTotalCandlesInserted();
-                this.errors = stats.getTotalErrorsAll();
-                this.processingRate = received > 0 ? (double) processed / received : 0.0;
-                this.errorRate =
-                        (processed + errors) > 0 ? (double) errors / (processed + errors) : 0.0;
-                this.receivedShares = stats.getTotalCandleReceivedShares();
-                this.receivedFutures = stats.getTotalCandleReceivedFutures();
-                this.receivedIndicatives = stats.getTotalCandleReceivedIndicatives();
-            }
-
-            public long getReceived() {
-                return received;
-            }
-
-            public long getProcessed() {
-                return processed;
-            }
-
-            public long getInserted() {
-                return inserted;
-            }
-
-            public long getErrors() {
-                return errors;
-            }
-
-            public double getProcessingRate() {
-                return processingRate;
-            }
-
-            public double getErrorRate() {
-                return errorRate;
-            }
-
-            public long getReceivedShares() {
-                return receivedShares;
-            }
-
-            public long getReceivedFutures() {
-                return receivedFutures;
-            }
-
-            public long getReceivedIndicatives() {
-                return receivedIndicatives;
-            }
-        }
     }
 }

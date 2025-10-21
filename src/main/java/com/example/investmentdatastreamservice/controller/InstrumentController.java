@@ -1,0 +1,389 @@
+package com.example.investmentdatastreamservice.controller;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import com.example.investmentdatastreamservice.entity.FutureEntity;
+import com.example.investmentdatastreamservice.entity.IndicativeEntity;
+import com.example.investmentdatastreamservice.entity.ShareEntity;
+import com.example.investmentdatastreamservice.service.CacheWarmupService;
+
+/**
+ * REST контроллер для работы с финансовыми инструментами
+ * 
+ * <p>
+ * Предоставляет API для получения информации об инструментах из кэша:
+ * </p>
+ * <ul>
+ * <li>Акции (Shares)</li>
+ * <li>Фьючерсы (Futures)</li>
+ * <li>Индикативные инструменты (Indicatives)</li>
+ * </ul>
+ * 
+ * <p>
+ * Все данные берутся из кэша, что обеспечивает высокую скорость ответа.
+ * </p>
+ * 
+ * @author InvestmentDataStreamService
+ * @version 1.0
+ * @since 2024
+ */
+@RestController
+@RequestMapping("/api/instruments")
+public class InstrumentController {
+
+    private final CacheWarmupService cacheWarmupService;
+
+    public InstrumentController(CacheWarmupService cacheWarmupService) {
+        this.cacheWarmupService = cacheWarmupService;
+    }
+
+    /**
+     * Получить все акции
+     * 
+     * <p>
+     * Возвращает полный список всех акций из кэша.
+     * </p>
+     * 
+     * <p>
+     * <strong>Пример запроса:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET / api / instruments / shares
+     * </pre>
+     * 
+     * @return список всех акций
+     */
+    @GetMapping("/shares")
+    public ResponseEntity<Map<String, Object>> getAllShares() {
+        try {
+            List<ShareEntity> shares = cacheWarmupService.getAllShares();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("count", shares.size());
+            response.put("data", shares);
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Ошибка при получении акций: " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Получить акцию по FIGI
+     * 
+     * <p>
+     * <strong>Пример запроса:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET / api / instruments / shares / BBG004730N88
+     * </pre>
+     * 
+     * @param figi FIGI акции
+     * @return акция или 404 Not Found
+     */
+    @GetMapping("/shares/{figi}")
+    public ResponseEntity<Map<String, Object>> getShareByFigi(@PathVariable String figi) {
+        try {
+            Optional<ShareEntity> share = cacheWarmupService.getAllShares().stream()
+                    .filter(s -> s.getFigi().equals(figi)).findFirst();
+
+            if (share.isPresent()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", true);
+                response.put("data", share.get());
+                response.put("timestamp", java.time.LocalDateTime.now().toString());
+                return ResponseEntity.ok(response);
+            } else {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "Акция с FIGI '" + figi + "' не найдена");
+                response.put("timestamp", java.time.LocalDateTime.now().toString());
+                return ResponseEntity.status(404).body(response);
+            }
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Ошибка при получении акции: " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Получить все фьючерсы
+     * 
+     * <p>
+     * Возвращает полный список всех фьючерсов из кэша.
+     * </p>
+     * 
+     * <p>
+     * <strong>Пример запроса:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET / api / instruments / futures
+     * </pre>
+     * 
+     * @return список всех фьючерсов
+     */
+    @GetMapping("/futures")
+    public ResponseEntity<Map<String, Object>> getAllFutures() {
+        try {
+            List<FutureEntity> futures = cacheWarmupService.getAllFutures();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("count", futures.size());
+            response.put("data", futures);
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Ошибка при получении фьючерсов: " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Получить фьючерс по FIGI
+     * 
+     * <p>
+     * <strong>Пример запроса:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET / api / instruments / futures / FUTSI123456
+     * </pre>
+     * 
+     * @param figi FIGI фьючерса
+     * @return фьючерс или 404 Not Found
+     */
+    @GetMapping("/futures/{figi}")
+    public ResponseEntity<Map<String, Object>> getFutureByFigi(@PathVariable String figi) {
+        try {
+            Optional<FutureEntity> future = cacheWarmupService.getAllFutures().stream()
+                    .filter(f -> f.getFigi().equals(figi)).findFirst();
+
+            if (future.isPresent()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", true);
+                response.put("data", future.get());
+                response.put("timestamp", java.time.LocalDateTime.now().toString());
+                return ResponseEntity.ok(response);
+            } else {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "Фьючерс с FIGI '" + figi + "' не найден");
+                response.put("timestamp", java.time.LocalDateTime.now().toString());
+                return ResponseEntity.status(404).body(response);
+            }
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Ошибка при получении фьючерса: " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Получить все индикативные инструменты
+     * 
+     * <p>
+     * Возвращает полный список всех индикативных инструментов из кэша.
+     * </p>
+     * 
+     * <p>
+     * <strong>Пример запроса:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET / api / instruments / indicatives
+     * </pre>
+     * 
+     * @return список всех индикативных инструментов
+     */
+    @GetMapping("/indicatives")
+    public ResponseEntity<Map<String, Object>> getAllIndicatives() {
+        try {
+            List<IndicativeEntity> indicatives = cacheWarmupService.getAllIndicatives();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("count", indicatives.size());
+            response.put("data", indicatives);
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error",
+                    "Ошибка при получении индикативных инструментов: " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Получить индикативный инструмент по FIGI
+     * 
+     * <p>
+     * <strong>Пример запроса:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET / api / instruments / indicatives / IND123456
+     * </pre>
+     * 
+     * @param figi FIGI индикативного инструмента
+     * @return индикативный инструмент или 404 Not Found
+     */
+    @GetMapping("/indicatives/{figi}")
+    public ResponseEntity<Map<String, Object>> getIndicativeByFigi(@PathVariable String figi) {
+        try {
+            Optional<IndicativeEntity> indicative = cacheWarmupService.getAllIndicatives().stream()
+                    .filter(i -> i.getFigi().equals(figi)).findFirst();
+
+            if (indicative.isPresent()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", true);
+                response.put("data", indicative.get());
+                response.put("timestamp", java.time.LocalDateTime.now().toString());
+                return ResponseEntity.ok(response);
+            } else {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "Индикативный инструмент с FIGI '" + figi + "' не найден");
+                response.put("timestamp", java.time.LocalDateTime.now().toString());
+                return ResponseEntity.status(404).body(response);
+            }
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error",
+                    "Ошибка при получении индикативного инструмента: " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Поиск инструментов
+     * 
+     * <p>
+     * Поиск по тикеру или названию инструмента.
+     * </p>
+     * 
+     * <p>
+     * <strong>Примеры запросов:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET / api / instruments / search?q = SBER GET / api / instruments / search?q = Сбербанк GET
+     * / api / instruments / search?q = Si
+     * </pre>
+     * 
+     * @param query поисковый запрос
+     * @return найденные инструменты
+     */
+    @GetMapping("/search")
+    public ResponseEntity<Map<String, Object>> searchInstruments(@RequestParam String q) {
+        try {
+            String query = q.toLowerCase();
+
+            List<ShareEntity> shares =
+                    cacheWarmupService.getAllShares().stream()
+                            .filter(s -> s.getTicker().toLowerCase().contains(query)
+                                    || s.getName().toLowerCase().contains(query))
+                            .limit(20).toList();
+
+            List<FutureEntity> futures = cacheWarmupService.getAllFutures().stream()
+                    .filter(f -> f.getTicker().toLowerCase().contains(query)).limit(20).toList();
+
+            List<IndicativeEntity> indicatives =
+                    cacheWarmupService.getAllIndicatives().stream()
+                            .filter(i -> i.getTicker() != null
+                                    && i.getTicker().toLowerCase().contains(query))
+                            .limit(20).toList();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("query", q);
+            response.put("results",
+                    Map.of("shares", shares, "futures", futures, "indicatives", indicatives));
+            response.put("totalCount", shares.size() + futures.size() + indicatives.size());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Ошибка при поиске инструментов: " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Получить статистику по инструментам
+     * 
+     * <p>
+     * Возвращает количество инструментов каждого типа.
+     * </p>
+     * 
+     * <p>
+     * <strong>Пример запроса:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET / api / instruments / summary
+     * </pre>
+     * 
+     * @return статистика по инструментам
+     */
+    @GetMapping("/summary")
+    public ResponseEntity<Map<String, Object>> getInstrumentsSummary() {
+        try {
+            int sharesCount = cacheWarmupService.getAllShares().size();
+            int futuresCount = cacheWarmupService.getAllFutures().size();
+            int indicativesCount = cacheWarmupService.getAllIndicatives().size();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("shares", sharesCount);
+            response.put("futures", futuresCount);
+            response.put("indicatives", indicativesCount);
+            response.put("total", sharesCount + futuresCount + indicativesCount);
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Ошибка при получении статистики: " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+}
+
