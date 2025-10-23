@@ -3,7 +3,7 @@ package com.example.investmentdatastreamservice.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import org.springframework.stereotype.Service;
-import com.example.investmentdatastreamservice.entity.CandleEntity;
+import com.example.investmentdatastreamservice.dto.MinuteCandleDto;
 
 /**
  * Сервис для работы с минутными свечами
@@ -39,16 +39,17 @@ public class CandleService {
      * @param high максимальная цена
      * @param low минимальная цена
      * @param close цена закрытия
-     * @return объект CandleEntity с вычисленными показателями
+     * @return объект MinuteCandleDto с вычисленными показателями
      */
-    public CandleEntity enrichCandleWithTechnicalIndicators(BigDecimal open, BigDecimal high,
+    public MinuteCandleDto enrichCandleWithTechnicalIndicators(BigDecimal open, BigDecimal high,
             BigDecimal low, BigDecimal close) {
 
-        CandleEntity candle = new CandleEntity();
-        candle.setOpen(open);
-        candle.setHigh(high);
-        candle.setLow(low);
-        candle.setClose(close);
+        MinuteCandleDto candle = MinuteCandleDto.builder()
+                .open(open)
+                .high(high)
+                .low(low)
+                .close(close)
+                .build();
 
         // Изменение цены (close - open)
         BigDecimal priceChange = close.subtract(open);

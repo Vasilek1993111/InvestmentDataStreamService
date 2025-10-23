@@ -16,9 +16,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import com.example.investmentdatastreamservice.entity.CandleEntity;
+import com.example.investmentdatastreamservice.dto.MinuteCandleDto;
 import com.example.investmentdatastreamservice.repository.FutureRepository;
 import com.example.investmentdatastreamservice.repository.ShareRepository;
+import com.example.investmentdatastreamservice.utils.TimeZoneUtils;
 import io.grpc.stub.StreamObserver;
 import jakarta.annotation.PreDestroy;
 import ru.tinkoff.piapi.contract.v1.Candle;
@@ -251,15 +252,14 @@ public class CandleStreamingService {
             BigDecimal close = convertQuotationToBigDecimal(candle.getClose());
 
             // Используем CandleService для создания свечи с техническими показателями
-            CandleEntity candleEntity =
-                    candleService.enrichCandleWithTechnicalIndicators(open, high, low, close);
-            candleEntity.setFigi(candle.getFigi());
-            candleEntity.setTime(eventTime);
-            candleEntity.setVolume(candle.getVolume());
-            candleEntity.setIsComplete(true);
+            MinuteCandleDto candleDto = candleService.enrichCandleWithTechnicalIndicators(open, high, low, close);
+            candleDto.setFigi(candle.getFigi());
+            candleDto.setTime(eventTime.atZone(TimeZoneUtils.getMoscowZone()).toInstant());
+            candleDto.setVolume(candle.getVolume());
+            candleDto.setComplete(true);
 
             // Асинхронно сохраняем в БД
-            insertCandleAsync(candleEntity);
+            insertCandleAsync(candleDto);
 
             // Мониторинг каждые 100 свечей
             if (totalReceived.get() % 100 == 0) {
@@ -309,19 +309,19 @@ public class CandleStreamingService {
      * используйте метод {@link #getActualCandleCount()}.
      * </p>
      */
-    private void insertCandleAsync(CandleEntity entity) {
+    private void insertCandleAsync(MinuteCandleDto dto) {
         insertExecutor.submit(() -> {
             try {
                 insertSemaphore.acquire();
 
-                java.sql.Timestamp ts = java.sql.Timestamp.valueOf(entity.getTime());
+                java.sql.Timestamp ts = java.sql.Timestamp.valueOf(dto.getTime().atZone(TimeZoneUtils.getMoscowZone()).toLocalDateTime());
 
                 // Быстрая вставка одним запросом (INSERT или UPDATE)
                 final String sql = "INSERT INTO invest.minute_candles "
                         + "(figi, time, open, high, low, close, volume, is_complete, "
                         + "price_change, price_change_percent, candle_type, body_size, "
                         + "upper_shadow, lower_shadow, high_low_range, average_price) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                         + "ON CONFLICT (figi, time) DO UPDATE SET "
                         + "open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low, "
                         + "close = EXCLUDED.close, volume = EXCLUDED.volume, "
@@ -333,14 +333,14 @@ public class CandleStreamingService {
                         + "upper_shadow = EXCLUDED.upper_shadow, "
                         + "lower_shadow = EXCLUDED.lower_shadow, "
                         + "high_low_range = EXCLUDED.high_low_range, "
-                        + "average_price = EXCLUDED.average_price, " + "updated_at = now()";
+                        + "average_price = EXCLUDED.average_price, " + "updated_at = CURRENT_TIMESTAMP";
 
-                streamJdbcTemplate.update(sql, entity.getFigi(), ts, entity.getOpen(),
-                        entity.getHigh(), entity.getLow(), entity.getClose(), entity.getVolume(),
-                        Boolean.TRUE.equals(entity.getIsComplete()), entity.getPriceChange(),
-                        entity.getPriceChangePercent(), entity.getCandleType(),
-                        entity.getBodySize(), entity.getUpperShadow(), entity.getLowerShadow(),
-                        entity.getHighLowRange(), entity.getAveragePrice());
+                streamJdbcTemplate.update(sql, dto.getFigi(), ts, dto.getOpen(),
+                        dto.getHigh(), dto.getLow(), dto.getClose(), dto.getVolume(),
+                        dto.isComplete(), dto.getPriceChange().doubleValue(),
+                        dto.getPriceChangePercent().doubleValue(), dto.getCandleType(),
+                        dto.getBodySize(), dto.getUpperShadow(), dto.getLowerShadow(),
+                        dto.getHighLowRange().doubleValue(), dto.getAveragePrice().doubleValue());
 
                 // Увеличиваем счетчик успешных операций
                 totalInserted.incrementAndGet();
@@ -348,7 +348,7 @@ public class CandleStreamingService {
             } catch (Exception e) {
                 totalErrors.incrementAndGet();
                 log.error("Error inserting/updating candle for FIGI: {}, Time: {} - Error: {}",
-                        entity.getFigi(), entity.getTime(), e.getMessage());
+                        dto.getFigi(), dto.getTime(), e.getMessage());
             } finally {
                 insertSemaphore.release();
             }

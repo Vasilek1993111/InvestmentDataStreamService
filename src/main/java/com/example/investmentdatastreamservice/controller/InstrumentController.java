@@ -10,9 +10,15 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import com.example.investmentdatastreamservice.dto.FutureDto;
+import com.example.investmentdatastreamservice.dto.IndicativeDto;
+import com.example.investmentdatastreamservice.dto.ShareDto;
 import com.example.investmentdatastreamservice.entity.FutureEntity;
 import com.example.investmentdatastreamservice.entity.IndicativeEntity;
 import com.example.investmentdatastreamservice.entity.ShareEntity;
+import com.example.investmentdatastreamservice.mapper.FutureMapper;
+import com.example.investmentdatastreamservice.mapper.IndicativeMapper;
+import com.example.investmentdatastreamservice.mapper.ShareMapper;
 import com.example.investmentdatastreamservice.service.CacheWarmupService;
 
 /**
@@ -40,9 +46,16 @@ import com.example.investmentdatastreamservice.service.CacheWarmupService;
 public class InstrumentController {
 
     private final CacheWarmupService cacheWarmupService;
+    private final ShareMapper shareMapper;
+    private final FutureMapper futureMapper;
+    private final IndicativeMapper indicativeMapper;
 
-    public InstrumentController(CacheWarmupService cacheWarmupService) {
+    public InstrumentController(CacheWarmupService cacheWarmupService, ShareMapper shareMapper, 
+                               FutureMapper futureMapper, IndicativeMapper indicativeMapper) {
         this.cacheWarmupService = cacheWarmupService;
+        this.shareMapper = shareMapper;
+        this.futureMapper = futureMapper;
+        this.indicativeMapper = indicativeMapper;
     }
 
     /**
@@ -66,11 +79,12 @@ public class InstrumentController {
     public ResponseEntity<Map<String, Object>> getAllShares() {
         try {
             List<ShareEntity> shares = cacheWarmupService.getAllShares();
+            List<ShareDto> shareDtos = shareMapper.toDtoList(shares);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("count", shares.size());
-            response.put("data", shares);
+            response.put("count", shareDtos.size());
+            response.put("data", shareDtos);
             response.put("timestamp", java.time.LocalDateTime.now().toString());
 
             return ResponseEntity.ok(response);
@@ -104,9 +118,10 @@ public class InstrumentController {
                     .filter(s -> s.getFigi().equals(figi)).findFirst();
 
             if (share.isPresent()) {
+                ShareDto shareDto = shareMapper.toDto(share.get());
                 Map<String, Object> response = new HashMap<>();
                 response.put("success", true);
-                response.put("data", share.get());
+                response.put("data", shareDto);
                 response.put("timestamp", java.time.LocalDateTime.now().toString());
                 return ResponseEntity.ok(response);
             } else {
@@ -146,11 +161,12 @@ public class InstrumentController {
     public ResponseEntity<Map<String, Object>> getAllFutures() {
         try {
             List<FutureEntity> futures = cacheWarmupService.getAllFutures();
+            List<FutureDto> futureDtos = futureMapper.toDtoList(futures);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("count", futures.size());
-            response.put("data", futures);
+            response.put("count", futureDtos.size());
+            response.put("data", futureDtos);
             response.put("timestamp", java.time.LocalDateTime.now().toString());
 
             return ResponseEntity.ok(response);
@@ -184,9 +200,10 @@ public class InstrumentController {
                     .filter(f -> f.getFigi().equals(figi)).findFirst();
 
             if (future.isPresent()) {
+                FutureDto futureDto = futureMapper.toDto(future.get());
                 Map<String, Object> response = new HashMap<>();
                 response.put("success", true);
-                response.put("data", future.get());
+                response.put("data", futureDto);
                 response.put("timestamp", java.time.LocalDateTime.now().toString());
                 return ResponseEntity.ok(response);
             } else {
@@ -226,11 +243,12 @@ public class InstrumentController {
     public ResponseEntity<Map<String, Object>> getAllIndicatives() {
         try {
             List<IndicativeEntity> indicatives = cacheWarmupService.getAllIndicatives();
+            List<IndicativeDto> indicativeDtos = indicativeMapper.toDtoList(indicatives);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("count", indicatives.size());
-            response.put("data", indicatives);
+            response.put("count", indicativeDtos.size());
+            response.put("data", indicativeDtos);
             response.put("timestamp", java.time.LocalDateTime.now().toString());
 
             return ResponseEntity.ok(response);
@@ -265,9 +283,10 @@ public class InstrumentController {
                     .filter(i -> i.getFigi().equals(figi)).findFirst();
 
             if (indicative.isPresent()) {
+                IndicativeDto indicativeDto = indicativeMapper.toDto(indicative.get());
                 Map<String, Object> response = new HashMap<>();
                 response.put("success", true);
-                response.put("data", indicative.get());
+                response.put("data", indicativeDto);
                 response.put("timestamp", java.time.LocalDateTime.now().toString());
                 return ResponseEntity.ok(response);
             } else {
@@ -326,12 +345,17 @@ public class InstrumentController {
                                     && i.getTicker().toLowerCase().contains(query))
                             .limit(20).toList();
 
+            // Конвертируем в DTO
+            List<ShareDto> shareDtos = shareMapper.toDtoList(shares);
+            List<FutureDto> futureDtos = futureMapper.toDtoList(futures);
+            List<IndicativeDto> indicativeDtos = indicativeMapper.toDtoList(indicatives);
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("query", q);
             response.put("results",
-                    Map.of("shares", shares, "futures", futures, "indicatives", indicatives));
-            response.put("totalCount", shares.size() + futures.size() + indicatives.size());
+                    Map.of("shares", shareDtos, "futures", futureDtos, "indicatives", indicativeDtos));
+            response.put("totalCount", shareDtos.size() + futureDtos.size() + indicativeDtos.size());
             response.put("timestamp", java.time.LocalDateTime.now().toString());
 
             return ResponseEntity.ok(response);

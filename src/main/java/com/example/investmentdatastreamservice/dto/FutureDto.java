@@ -1,24 +1,25 @@
-package com.example.investmentdatastreamservice.entity; 
+package com.example.investmentdatastreamservice.dto;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "shares", schema = "invest")
+/**
+ * DTO для фьючерсов
+ * 
+ * Представляет данные о фьючерсах для API ответов.
+ * Содержит информацию о тикере, названии, валюте и других параметрах фьючерса.
+ */
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ShareEntity {
-    @Id
+public class FutureDto {
+    
     private String figi;
     private String ticker;
     private String name;
@@ -31,12 +32,6 @@ public class ShareEntity {
     private BigDecimal minPriceIncrement;
     private Integer lot;
     
-    @CreationTimestamp
     private LocalDateTime createdAt;
-    
-    @UpdateTimestamp
     private LocalDateTime updatedAt;
-
-    
-    
 }

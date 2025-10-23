@@ -1,0 +1,465 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- =========================================== -->
+    <!-- LOGGING CONFIGURATION -->
+    <!-- =========================================== -->
+    <!-- Централизованная конфигурация логирования для всех окружений -->
+
+    <!-- =========================================== -->
+    <!-- APPENDERS -->
+    <!-- =========================================== -->
+
+    <!-- Консольный appender -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{profile:-DEFAULT}] %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- =========================================== -->
+    <!-- TEST PROFILE APPENDERS -->
+    <!-- =========================================== -->
+    
+    <!-- Основной файл для тестов -->
+    <springProfile name="test">
+        <appender name="TEST_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/test/current/investment-data-stream-service-test.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>logs/test/archive/investment-data-stream-service-test.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>50MB</maxFileSize>
+                <maxHistory>7</maxHistory>
+                <totalSizeCap>200MB</totalSizeCap>
+                <cleanHistoryOnStart>true</cleanHistoryOnStart>
+            </rollingPolicy>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{profile:-DEFAULT}] %logger{36} - %msg%n</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+        <!-- Файл ошибок для тестов -->
+        <appender name="TEST_ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/test/current/errors-test.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>logs/test/archive/errors-test.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>50MB</maxFileSize>
+                <maxHistory>7</maxHistory>
+                <totalSizeCap>200MB</totalSizeCap>
+                <cleanHistoryOnStart>true</cleanHistoryOnStart>
+            </rollingPolicy>
+            <filter class="ch.qos.logback.classic.filter.LevelFilter">
+                <level>ERROR</level>
+                <onMatch>ACCEPT</onMatch>
+                <onMismatch>DENY</onMismatch>
+            </filter>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{profile:-DEFAULT}] %logger{36} - %msg%n</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <!-- =========================================== -->
+    <!-- PRODUCTION PROFILE APPENDERS -->
+    <!-- =========================================== -->
+    
+    <!-- Основной файл для продакшна -->
+    <springProfile name="prod">
+        <appender name="PROD_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/prod/current/investment-data-stream-service-prod.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>logs/prod/archive/investment-data-stream-service-prod.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>500MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>2GB</totalSizeCap>
+                <cleanHistoryOnStart>true</cleanHistoryOnStart>
+            </rollingPolicy>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{profile:-DEFAULT}] %logger{36} - %msg%n</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+        <!-- Файл ошибок для продакшна -->
+        <appender name="PROD_ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/prod/current/errors-prod.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>logs/prod/archive/errors-prod.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>500MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>2GB</totalSizeCap>
+                <cleanHistoryOnStart>true</cleanHistoryOnStart>
+            </rollingPolicy>
+            <filter class="ch.qos.logback.classic.filter.LevelFilter">
+                <level>ERROR</level>
+                <onMatch>ACCEPT</onMatch>
+                <onMismatch>DENY</onMismatch>
+            </filter>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{profile:-DEFAULT}] %logger{36} - %msg%n</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+        <!-- Файл метрик для продакшна -->
+        <appender name="PROD_METRICS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/prod/current/metrics-prod.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>logs/prod/archive/metrics-prod.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>500MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>2GB</totalSizeCap>
+                <cleanHistoryOnStart>true</cleanHistoryOnStart>
+            </rollingPolicy>
+            <filter class="ch.qos.logback.classic.filter.LevelFilter">
+                <level>INFO</level>
+                <onMatch>ACCEPT</onMatch>
+                <onMismatch>DENY</onMismatch>
+            </filter>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{profile:-DEFAULT}] %logger{36} - %msg%n</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <!-- =========================================== -->
+    <!-- DEFAULT PROFILE APPENDERS -->
+    <!-- =========================================== -->
+    
+    <!-- Основной файл по умолчанию -->
+    <springProfile name="!test,!prod">
+        <appender name="DEFAULT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/current/investment-data-stream-service.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>logs/archive/investment-data-stream-service.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>100MB</maxFileSize>
+                <maxHistory>15</maxHistory>
+                <totalSizeCap>500MB</totalSizeCap>
+                <cleanHistoryOnStart>true</cleanHistoryOnStart>
+            </rollingPolicy>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{profile:-DEFAULT}] %logger{36} - %msg%n</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+        <!-- Файл ошибок по умолчанию -->
+        <appender name="DEFAULT_ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/current/errors.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>logs/archive/errors.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>100MB</maxFileSize>
+                <maxHistory>15</maxHistory>
+                <totalSizeCap>500MB</totalSizeCap>
+                <cleanHistoryOnStart>true</cleanHistoryOnStart>
+            </rollingPolicy>
+            <filter class="ch.qos.logback.classic.filter.LevelFilter">
+                <level>ERROR</level>
+                <onMatch>ACCEPT</onMatch>
+                <onMismatch>DENY</onMismatch>
+            </filter>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{profile:-DEFAULT}] %logger{36} - %msg%n</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <!-- =========================================== -->
+    <!-- ASYNC APPENDERS -->
+    <!-- =========================================== -->
+
+    <!-- Асинхронные appenders для производительности -->
+    <appender name="ASYNC_TEST_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="TEST_FILE"/>
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <appender name="ASYNC_PROD_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="PROD_FILE"/>
+        <queueSize>2048</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <appender name="ASYNC_DEFAULT_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="DEFAULT_FILE"/>
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <appender name="ASYNC_TEST_ERROR" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="TEST_ERROR_FILE"/>
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <appender name="ASYNC_PROD_ERROR" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="PROD_ERROR_FILE"/>
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <appender name="ASYNC_DEFAULT_ERROR" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="DEFAULT_ERROR_FILE"/>
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <springProfile name="prod">
+        <appender name="ASYNC_PROD_METRICS" class="ch.qos.logback.classic.AsyncAppender">
+            <appender-ref ref="PROD_METRICS_FILE"/>
+            <queueSize>2048</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+            <includeCallerData>false</includeCallerData>
+        </appender>
+    </springProfile>
+
+    <!-- =========================================== -->
+    <!-- LOGGERS -->
+    <!-- =========================================== -->
+
+    <!-- Основной логгер приложения -->
+    <logger name="com.example.investmentdatastreamservice" additivity="false">
+        <springProfile name="test">
+            <level value="DEBUG"/>
+        </springProfile>
+        <springProfile name="prod">
+            <level value="INFO"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <level value="INFO"/>
+        </springProfile>
+        
+        <appender-ref ref="CONSOLE"/>
+        <springProfile name="test">
+            <appender-ref ref="ASYNC_TEST_FILE"/>
+            <appender-ref ref="ASYNC_TEST_ERROR"/>
+        </springProfile>
+        <springProfile name="prod">
+            <appender-ref ref="ASYNC_PROD_FILE"/>
+            <appender-ref ref="ASYNC_PROD_ERROR"/>
+            <appender-ref ref="ASYNC_PROD_METRICS"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <appender-ref ref="ASYNC_DEFAULT_FILE"/>
+            <appender-ref ref="ASYNC_DEFAULT_ERROR"/>
+        </springProfile>
+        
+        <springProfile name="prod">
+            <appender-ref ref="ASYNC_METRICS"/>
+        </springProfile>
+    </logger>
+
+    <!-- Логгер для сервисов -->
+    <logger name="com.example.investmentdatastreamservice.service" additivity="false">
+        <springProfile name="test">
+            <level value="DEBUG"/>
+        </springProfile>
+        <springProfile name="prod">
+            <level value="INFO"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <level value="INFO"/>
+        </springProfile>
+        
+        <appender-ref ref="CONSOLE"/>
+        <springProfile name="test">
+            <appender-ref ref="ASYNC_TEST_FILE"/>
+            <appender-ref ref="ASYNC_TEST_ERROR"/>
+        </springProfile>
+        <springProfile name="prod">
+            <appender-ref ref="ASYNC_PROD_FILE"/>
+            <appender-ref ref="ASYNC_PROD_ERROR"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <appender-ref ref="ASYNC_DEFAULT_FILE"/>
+            <appender-ref ref="ASYNC_DEFAULT_ERROR"/>
+        </springProfile>
+    </logger>
+
+    <!-- Логгер для контроллеров -->
+    <logger name="com.example.investmentdatastreamservice.controller" additivity="false">
+        <springProfile name="test">
+            <level value="DEBUG"/>
+        </springProfile>
+        <springProfile name="prod">
+            <level value="WARN"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <level value="INFO"/>
+        </springProfile>
+        
+        <appender-ref ref="CONSOLE"/>
+        <springProfile name="test">
+            <appender-ref ref="ASYNC_TEST_FILE"/>
+            <appender-ref ref="ASYNC_TEST_ERROR"/>
+        </springProfile>
+        <springProfile name="prod">
+            <appender-ref ref="ASYNC_PROD_FILE"/>
+            <appender-ref ref="ASYNC_PROD_ERROR"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <appender-ref ref="ASYNC_DEFAULT_FILE"/>
+            <appender-ref ref="ASYNC_DEFAULT_ERROR"/>
+        </springProfile>
+    </logger>
+
+    <!-- Spring Framework -->
+    <logger name="org.springframework" additivity="false">
+        <springProfile name="test">
+            <level value="DEBUG"/>
+        </springProfile>
+        <springProfile name="prod">
+            <level value="WARN"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <level value="INFO"/>
+        </springProfile>
+        
+        <appender-ref ref="CONSOLE"/>
+        <springProfile name="test">
+            <appender-ref ref="ASYNC_TEST_FILE"/>
+        </springProfile>
+        <springProfile name="prod">
+            <appender-ref ref="ASYNC_PROD_FILE"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <appender-ref ref="ASYNC_DEFAULT_FILE"/>
+        </springProfile>
+    </logger>
+
+    <!-- Hibernate SQL -->
+    <logger name="org.hibernate.SQL" additivity="false">
+        <springProfile name="test">
+            <level value="DEBUG"/>
+        </springProfile>
+        <springProfile name="prod">
+            <level value="WARN"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <level value="INFO"/>
+        </springProfile>
+        
+        <appender-ref ref="CONSOLE"/>
+        <springProfile name="test">
+            <appender-ref ref="ASYNC_TEST_FILE"/>
+        </springProfile>
+        <springProfile name="prod">
+            <appender-ref ref="ASYNC_PROD_FILE"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <appender-ref ref="ASYNC_DEFAULT_FILE"/>
+        </springProfile>
+    </logger>
+
+    <!-- Hibernate параметры -->
+    <logger name="org.hibernate.type.descriptor.sql.BasicBinder" additivity="false">
+        <springProfile name="test">
+            <level value="TRACE"/>
+        </springProfile>
+        <springProfile name="prod">
+            <level value="WARN"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <level value="WARN"/>
+        </springProfile>
+        
+        <appender-ref ref="CONSOLE"/>
+        <springProfile name="test">
+            <appender-ref ref="ASYNC_TEST_FILE"/>
+        </springProfile>
+        <springProfile name="prod">
+            <appender-ref ref="ASYNC_PROD_FILE"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <appender-ref ref="ASYNC_DEFAULT_FILE"/>
+        </springProfile>
+    </logger>
+
+    <!-- gRPC -->
+    <logger name="io.grpc" additivity="false">
+        <springProfile name="test">
+            <level value="DEBUG"/>
+        </springProfile>
+        <springProfile name="prod">
+            <level value="WARN"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <level value="INFO"/>
+        </springProfile>
+        
+        <appender-ref ref="CONSOLE"/>
+        <springProfile name="test">
+            <appender-ref ref="ASYNC_TEST_FILE"/>
+        </springProfile>
+        <springProfile name="prod">
+            <appender-ref ref="ASYNC_PROD_FILE"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <appender-ref ref="ASYNC_DEFAULT_FILE"/>
+        </springProfile>
+    </logger>
+
+    <!-- Tinkoff API -->
+    <logger name="ru.tinkoff.piapi" additivity="false">
+        <springProfile name="test">
+            <level value="DEBUG"/>
+        </springProfile>
+        <springProfile name="prod">
+            <level value="WARN"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <level value="INFO"/>
+        </springProfile>
+        
+        <appender-ref ref="CONSOLE"/>
+        <springProfile name="test">
+            <appender-ref ref="ASYNC_TEST_FILE"/>
+        </springProfile>
+        <springProfile name="prod">
+            <appender-ref ref="ASYNC_PROD_FILE"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <appender-ref ref="ASYNC_DEFAULT_FILE"/>
+        </springProfile>
+    </logger>
+
+    <!-- =========================================== -->
+    <!-- ROOT LOGGER -->
+    <!-- =========================================== -->
+    <root>
+        <springProfile name="test">
+            <level value="DEBUG"/>
+        </springProfile>
+        <springProfile name="prod">
+            <level value="WARN"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <level value="INFO"/>
+        </springProfile>
+        
+        <appender-ref ref="CONSOLE"/>
+        <springProfile name="test">
+            <appender-ref ref="ASYNC_TEST_FILE"/>
+            <appender-ref ref="ASYNC_TEST_ERROR"/>
+        </springProfile>
+        <springProfile name="prod">
+            <appender-ref ref="ASYNC_PROD_FILE"/>
+            <appender-ref ref="ASYNC_PROD_ERROR"/>
+        </springProfile>
+        <springProfile name="!test,!prod">
+            <appender-ref ref="ASYNC_DEFAULT_FILE"/>
+            <appender-ref ref="ASYNC_DEFAULT_ERROR"/>
+        </springProfile>
+    </root>
+
+</configuration>
