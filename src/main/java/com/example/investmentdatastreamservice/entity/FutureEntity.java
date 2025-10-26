@@ -1,13 +1,12 @@
 package com.example.investmentdatastreamservice.entity;
 
+import com.example.investmentdatastreamservice.utils.TimeZoneUtils;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-
-import com.example.investmentdatastreamservice.utils.TimeZoneUtils;
 
 @Entity
 @Table(name = "futures", schema = "invest")
@@ -39,7 +38,7 @@ public class FutureEntity {
     @Column(name = "expiration_date")
     private LocalDateTime expirationDate;
     
-    @Column(name = "min_price_increment")
+    @Column(name = "min_price_increment", precision = 18, scale = 9)
     private BigDecimal minPriceIncrement;
     
     @Column(name = "lot")

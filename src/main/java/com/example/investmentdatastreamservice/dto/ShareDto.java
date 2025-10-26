@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+
 
 /**
  * DTO для акций
@@ -31,7 +31,4 @@ public class ShareDto {
     private String assetUid;
     private BigDecimal minPriceIncrement;
     private Integer lot;
-    
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
 }

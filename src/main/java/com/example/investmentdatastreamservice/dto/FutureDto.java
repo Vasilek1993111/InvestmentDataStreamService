@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+
 
 /**
  * DTO для фьючерсов
@@ -22,16 +22,13 @@ public class FutureDto {
     
     private String figi;
     private String ticker;
-    private String name;
+    private String basicAsset;
     private String currency;
     private String exchange;
-    private String sector;
-    private String tradingStatus;
     private Boolean shortEnabled;
-    private String assetUid;
     private BigDecimal minPriceIncrement;
     private Integer lot;
+    private BigDecimal basicAssetSize;
     
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    
 }

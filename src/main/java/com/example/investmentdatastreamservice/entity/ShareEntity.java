@@ -1,5 +1,6 @@
-package com.example.investmentdatastreamservice.entity; 
+package com.example.investmentdatastreamservice.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -28,7 +29,10 @@ public class ShareEntity {
     private String tradingStatus;
     private Boolean shortEnabled;
     private String assetUid;
+    
+    @Column(name = "min_price_increment", precision = 18, scale = 9)
     private BigDecimal minPriceIncrement;
+    
     private Integer lot;
     
     @CreationTimestamp

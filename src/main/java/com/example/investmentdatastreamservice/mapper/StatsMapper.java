@@ -54,8 +54,8 @@ public interface StatsMapper {
     @Mapping(target = "receivedShares", source = "totalTradeReceivedShares")
     @Mapping(target = "receivedFutures", source = "totalTradeReceivedFutures")
     @Mapping(target = "receivedIndicatives", source = "totalTradeReceivedIndicatives")
-    @Mapping(target = "processingRate", expression = "java(calculateProcessingRate(stats.getTotalTradeMessagesReceived(), stats.getTotalTradesProcessed()))")
-    @Mapping(target = "errorRate", expression = "java(calculateErrorRate(stats.getTotalTradesProcessed(), stats.getTotalErrorsAll()))")
+    @Mapping(target = "processingRate", ignore = true)
+    @Mapping(target = "errorRate", ignore = true)
     TradeStatsDto toTradeStatsDto(ServiceStats stats);
     
     /**

@@ -133,7 +133,12 @@ public class EnvironmentConfig {
             log.warn("SECURITY: Using default test token. Replace with real token for production!");
         } else {
             log.info("SECURITY: API token is configured (length: {})", tinkoffApiToken.length());
+            log.debug("SECURITY: Token starts with: {}", tinkoffApiToken.substring(0, Math.min(10, tinkoffApiToken.length())));
         }
+        
+        // Дополнительная отладка
+        log.info("DEBUG: Active profile: {}", activeProfile);
+        log.info("DEBUG: Token value: {}", tinkoffApiToken != null ? "SET" : "NULL");
         
         // Проверка пароля БД
         if (dbPassword == null || dbPassword.trim().isEmpty()) {

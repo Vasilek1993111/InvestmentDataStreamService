@@ -6,6 +6,8 @@ import com.example.investmentdatastreamservice.entity.ShareEntity;
 import com.example.investmentdatastreamservice.repository.FutureRepository;
 import com.example.investmentdatastreamservice.repository.IndicativeRepository;
 import com.example.investmentdatastreamservice.repository.ShareRepository;
+import com.example.investmentdatastreamservice.service.LimitsService;
+import com.example.investmentdatastreamservice.dto.LimitsDto;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,12 +47,14 @@ public class CacheWarmupService {
     private final ShareRepository shareRepository;
     private final FutureRepository futureRepository;
     private final IndicativeRepository indicativeRepository;
+    private final LimitsService limitsService;
 
     public CacheWarmupService(ShareRepository shareRepository, FutureRepository futureRepository,
-            IndicativeRepository indicativeRepository) {
+            IndicativeRepository indicativeRepository, LimitsService limitsService) {
         this.shareRepository = shareRepository;
         this.futureRepository = futureRepository;
         this.indicativeRepository = indicativeRepository;
+        this.limitsService = limitsService;
     }
 
     /**
@@ -83,6 +87,9 @@ public class CacheWarmupService {
             // Загружаем индикативные инструменты
             List<IndicativeEntity> indicatives = getAllIndicatives();
             logger.info("Загружено {} индикативных инструментов в кэш", indicatives.size());
+
+            // Прогреваем кэш лимитов для акций и фьючерсов
+            warmupLimitsCache(shares, futures);
 
             long duration = System.currentTimeMillis() - startTime;
             logger.info("Прогрев кэша завершен за {} мс. Всего инструментов: {}", duration,
@@ -123,6 +130,9 @@ public class CacheWarmupService {
 
             List<IndicativeEntity> indicatives = getAllIndicatives();
             logger.info("Загружено {} индикативных инструментов в кэш", indicatives.size());
+
+            // Прогреваем кэш лимитов для акций и фьючерсов
+            warmupLimitsCache(shares, futures);
 
             long duration = System.currentTimeMillis() - startTime;
             logger.info("Ручной прогрев кэша завершен за {} мс. Всего инструментов: {}", duration,
@@ -216,6 +226,89 @@ public class CacheWarmupService {
     @CacheEvict(value = "indicativesCache", allEntries = true)
     public void evictIndicativesCache() {
         logger.info("Кэш индикативных инструментов очищен");
+    }
+
+    /**
+     * Прогрев кэша лимитов для акций и фьючерсов
+     * 
+     * <p>
+     * Загружает лимиты для всех акций и фьючерсов в кэш для быстрого доступа.
+     * Обрабатывает ошибки gracefully, не прерывая работу приложения.
+     * </p>
+     * 
+     * @param shares список акций
+     * @param futures список фьючерсов
+     */
+    private void warmupLimitsCache(List<ShareEntity> shares, List<FutureEntity> futures) {
+        logger.info("🔥 Начинается прогрев кэша лимитов для {} акций и {} фьючерсов", 
+                shares.size(), futures.size());
+        
+        long startTime = System.currentTimeMillis();
+        int successCount = 0;
+        int errorCount = 0;
+        int skippedCount = 0;
+
+        // Прогреваем лимиты для акций
+        logger.info("📈 Прогрев лимитов для акций...");
+        for (ShareEntity share : shares) {
+            if (share.getFigi() != null && !share.getFigi().trim().isEmpty()) {
+                try {
+                    logger.debug("🔄 Запрос лимитов для акции: {} ({})", share.getTicker(), share.getFigi());
+                    // Вызываем getLimits - получаем данные из API
+                    LimitsDto limits = limitsService.getLimits(share.getFigi());
+                    if (limits != null && limits.getLimitDown() != null && limits.getLimitUp() != null) {
+                        // Принудительно сохраняем в кэш (так как @Cacheable не работает при вызове изнутри класса)
+                        limitsService.saveLimitsToCache(share.getFigi(), limits);
+                        successCount++;
+                        logger.debug("✅ Акция {} - лимиты получены и принудительно сохранены в кэш", share.getTicker());
+                    } else {
+                        errorCount++;
+                        logger.debug("⚠️ Акция {} - лимиты пустые", share.getTicker());
+                    }
+                } catch (Exception e) {
+                    errorCount++;
+                    logger.debug("❌ Ошибка при загрузке лимитов для акции {}: {}", 
+                            share.getFigi(), e.getMessage());
+                }
+            } else {
+                skippedCount++;
+            }
+        }
+
+        // Прогреваем лимиты для фьючерсов
+        logger.info("📈 Прогрев лимитов для фьючерсов...");
+        for (FutureEntity future : futures) {
+            if (future.getFigi() != null && !future.getFigi().trim().isEmpty()) {
+                try {
+                    logger.debug("🔄 Запрос лимитов для фьючерса: {} ({})", future.getTicker(), future.getFigi());
+                    // Вызываем getLimits - получаем данные из API
+                    LimitsDto limits = limitsService.getLimits(future.getFigi());
+                    if (limits != null && limits.getLimitDown() != null && limits.getLimitUp() != null) {
+                        // Принудительно сохраняем в кэш (так как @Cacheable не работает при вызове изнутри класса)
+                        limitsService.saveLimitsToCache(future.getFigi(), limits);
+                        successCount++;
+                        logger.debug("✅ Фьючерс {} - лимиты получены и принудительно сохранены в кэш", future.getTicker());
+                    } else {
+                        errorCount++;
+                        logger.debug("⚠️ Фьючерс {} - лимиты пустые", future.getTicker());
+                    }
+                } catch (Exception e) {
+                    errorCount++;
+                    logger.debug("❌ Ошибка при загрузке лимитов для фьючерса {}: {}", 
+                            future.getFigi(), e.getMessage());
+                }
+            } else {
+                skippedCount++;
+            }
+        }
+
+        long duration = System.currentTimeMillis() - startTime;
+        logger.info("🔥 Прогрев кэша лимитов завершен за {} мс. Успешно: {}, Ошибок: {}, Пропущено: {}", 
+                duration, successCount, errorCount, skippedCount);
+        
+        if (errorCount > 0) {
+            logger.warn("При прогреве кэша лимитов произошло {} ошибок. Проверьте подключение к Tinkoff API и токен аутентификации.", errorCount);
+        }
     }
 }
 

@@ -24,10 +24,6 @@ public interface FutureMapper {
      * @param entity сущность фьючерса
      * @return DTO фьючерса
      */
-    @org.mapstruct.Mapping(target = "name", ignore = true)
-    @org.mapstruct.Mapping(target = "sector", ignore = true)
-    @org.mapstruct.Mapping(target = "tradingStatus", ignore = true)
-    @org.mapstruct.Mapping(target = "assetUid", ignore = true)
     FutureDto toDto(FutureEntity entity);
     
     /**
@@ -36,10 +32,6 @@ public interface FutureMapper {
      * @param dto DTO фьючерса
      * @return сущность фьючерса
      */
-    @org.mapstruct.Mapping(target = "assetType", ignore = true)
-    @org.mapstruct.Mapping(target = "basicAsset", ignore = true)
-    @org.mapstruct.Mapping(target = "basicAssetSize", ignore = true)
-    @org.mapstruct.Mapping(target = "expirationDate", ignore = true)
     FutureEntity toEntity(FutureDto dto);
     
     /**

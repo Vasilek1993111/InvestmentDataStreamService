@@ -214,252 +214,228 @@
         <includeCallerData>false</includeCallerData>
     </appender>
 
-    <springProfile name="prod">
-        <appender name="ASYNC_PROD_METRICS" class="ch.qos.logback.classic.AsyncAppender">
-            <appender-ref ref="PROD_METRICS_FILE"/>
-            <queueSize>2048</queueSize>
-            <discardingThreshold>0</discardingThreshold>
-            <includeCallerData>false</includeCallerData>
-        </appender>
-    </springProfile>
+    <appender name="ASYNC_PROD_METRICS" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="PROD_METRICS_FILE"/>
+        <queueSize>2048</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
 
     <!-- =========================================== -->
     <!-- LOGGERS -->
     <!-- =========================================== -->
 
     <!-- Основной логгер приложения -->
-    <logger name="com.example.investmentdatastreamservice" additivity="false">
-        <springProfile name="test">
-            <level value="DEBUG"/>
-        </springProfile>
-        <springProfile name="prod">
-            <level value="INFO"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
-            <level value="INFO"/>
-        </springProfile>
-        
-        <appender-ref ref="CONSOLE"/>
-        <springProfile name="test">
+    <springProfile name="test">
+        <logger name="com.example.investmentdatastreamservice" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_TEST_FILE"/>
             <appender-ref ref="ASYNC_TEST_ERROR"/>
-        </springProfile>
-        <springProfile name="prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="prod">
+        <logger name="com.example.investmentdatastreamservice" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_PROD_FILE"/>
             <appender-ref ref="ASYNC_PROD_ERROR"/>
             <appender-ref ref="ASYNC_PROD_METRICS"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="!test,!prod">
+        <logger name="com.example.investmentdatastreamservice" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_DEFAULT_FILE"/>
             <appender-ref ref="ASYNC_DEFAULT_ERROR"/>
-        </springProfile>
-        
-        <springProfile name="prod">
-            <appender-ref ref="ASYNC_METRICS"/>
-        </springProfile>
-    </logger>
+        </logger>
+    </springProfile>
 
     <!-- Логгер для сервисов -->
-    <logger name="com.example.investmentdatastreamservice.service" additivity="false">
-        <springProfile name="test">
-            <level value="DEBUG"/>
-        </springProfile>
-        <springProfile name="prod">
-            <level value="INFO"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
-            <level value="INFO"/>
-        </springProfile>
-        
-        <appender-ref ref="CONSOLE"/>
-        <springProfile name="test">
+    <springProfile name="test">
+        <logger name="com.example.investmentdatastreamservice.service" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_TEST_FILE"/>
             <appender-ref ref="ASYNC_TEST_ERROR"/>
-        </springProfile>
-        <springProfile name="prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="prod">
+        <logger name="com.example.investmentdatastreamservice.service" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_PROD_FILE"/>
             <appender-ref ref="ASYNC_PROD_ERROR"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="!test,!prod">
+        <logger name="com.example.investmentdatastreamservice.service" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_DEFAULT_FILE"/>
             <appender-ref ref="ASYNC_DEFAULT_ERROR"/>
-        </springProfile>
-    </logger>
+        </logger>
+    </springProfile>
 
     <!-- Логгер для контроллеров -->
-    <logger name="com.example.investmentdatastreamservice.controller" additivity="false">
-        <springProfile name="test">
-            <level value="DEBUG"/>
-        </springProfile>
-        <springProfile name="prod">
-            <level value="WARN"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
-            <level value="INFO"/>
-        </springProfile>
-        
-        <appender-ref ref="CONSOLE"/>
-        <springProfile name="test">
+    <springProfile name="test">
+        <logger name="com.example.investmentdatastreamservice.controller" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_TEST_FILE"/>
             <appender-ref ref="ASYNC_TEST_ERROR"/>
-        </springProfile>
-        <springProfile name="prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="prod">
+        <logger name="com.example.investmentdatastreamservice.controller" level="WARN" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_PROD_FILE"/>
             <appender-ref ref="ASYNC_PROD_ERROR"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="!test,!prod">
+        <logger name="com.example.investmentdatastreamservice.controller" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_DEFAULT_FILE"/>
             <appender-ref ref="ASYNC_DEFAULT_ERROR"/>
-        </springProfile>
-    </logger>
+        </logger>
+    </springProfile>
 
     <!-- Spring Framework -->
-    <logger name="org.springframework" additivity="false">
-        <springProfile name="test">
-            <level value="DEBUG"/>
-        </springProfile>
-        <springProfile name="prod">
-            <level value="WARN"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
-            <level value="INFO"/>
-        </springProfile>
-        
-        <appender-ref ref="CONSOLE"/>
-        <springProfile name="test">
+    <springProfile name="test">
+        <logger name="org.springframework" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_TEST_FILE"/>
-        </springProfile>
-        <springProfile name="prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="prod">
+        <logger name="org.springframework" level="WARN" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_PROD_FILE"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="!test,!prod">
+        <logger name="org.springframework" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_DEFAULT_FILE"/>
-        </springProfile>
-    </logger>
+        </logger>
+    </springProfile>
 
     <!-- Hibernate SQL -->
-    <logger name="org.hibernate.SQL" additivity="false">
-        <springProfile name="test">
-            <level value="DEBUG"/>
-        </springProfile>
-        <springProfile name="prod">
-            <level value="WARN"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
-            <level value="INFO"/>
-        </springProfile>
-        
-        <appender-ref ref="CONSOLE"/>
-        <springProfile name="test">
+    <springProfile name="test">
+        <logger name="org.hibernate.SQL" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_TEST_FILE"/>
-        </springProfile>
-        <springProfile name="prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="prod">
+        <logger name="org.hibernate.SQL" level="WARN" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_PROD_FILE"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="!test,!prod">
+        <logger name="org.hibernate.SQL" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_DEFAULT_FILE"/>
-        </springProfile>
-    </logger>
+        </logger>
+    </springProfile>
 
     <!-- Hibernate параметры -->
-    <logger name="org.hibernate.type.descriptor.sql.BasicBinder" additivity="false">
-        <springProfile name="test">
-            <level value="TRACE"/>
-        </springProfile>
-        <springProfile name="prod">
-            <level value="WARN"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
-            <level value="WARN"/>
-        </springProfile>
-        
-        <appender-ref ref="CONSOLE"/>
-        <springProfile name="test">
+    <springProfile name="test">
+        <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="TRACE" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_TEST_FILE"/>
-        </springProfile>
-        <springProfile name="prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="prod">
+        <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="WARN" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_PROD_FILE"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="!test,!prod">
+        <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="WARN" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_DEFAULT_FILE"/>
-        </springProfile>
-    </logger>
+        </logger>
+    </springProfile>
 
     <!-- gRPC -->
-    <logger name="io.grpc" additivity="false">
-        <springProfile name="test">
-            <level value="DEBUG"/>
-        </springProfile>
-        <springProfile name="prod">
-            <level value="WARN"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
-            <level value="INFO"/>
-        </springProfile>
-        
-        <appender-ref ref="CONSOLE"/>
-        <springProfile name="test">
+    <springProfile name="test">
+        <logger name="io.grpc" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_TEST_FILE"/>
-        </springProfile>
-        <springProfile name="prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="prod">
+        <logger name="io.grpc" level="WARN" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_PROD_FILE"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="!test,!prod">
+        <logger name="io.grpc" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_DEFAULT_FILE"/>
-        </springProfile>
-    </logger>
+        </logger>
+    </springProfile>
 
     <!-- Tinkoff API -->
-    <logger name="ru.tinkoff.piapi" additivity="false">
-        <springProfile name="test">
-            <level value="DEBUG"/>
-        </springProfile>
-        <springProfile name="prod">
-            <level value="WARN"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
-            <level value="INFO"/>
-        </springProfile>
-        
-        <appender-ref ref="CONSOLE"/>
-        <springProfile name="test">
+    <springProfile name="test">
+        <logger name="ru.tinkoff.piapi" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_TEST_FILE"/>
-        </springProfile>
-        <springProfile name="prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="prod">
+        <logger name="ru.tinkoff.piapi" level="WARN" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_PROD_FILE"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
+        </logger>
+    </springProfile>
+
+    <springProfile name="!test,!prod">
+        <logger name="ru.tinkoff.piapi" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_DEFAULT_FILE"/>
-        </springProfile>
-    </logger>
+        </logger>
+    </springProfile>
 
     <!-- =========================================== -->
     <!-- ROOT LOGGER -->
     <!-- =========================================== -->
-    <root>
-        <springProfile name="test">
-            <level value="DEBUG"/>
-        </springProfile>
-        <springProfile name="prod">
-            <level value="WARN"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
-            <level value="INFO"/>
-        </springProfile>
-        
-        <appender-ref ref="CONSOLE"/>
-        <springProfile name="test">
+    <springProfile name="test">
+        <root level="DEBUG">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_TEST_FILE"/>
             <appender-ref ref="ASYNC_TEST_ERROR"/>
-        </springProfile>
-        <springProfile name="prod">
+        </root>
+    </springProfile>
+
+    <springProfile name="prod">
+        <root level="WARN">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_PROD_FILE"/>
             <appender-ref ref="ASYNC_PROD_ERROR"/>
-        </springProfile>
-        <springProfile name="!test,!prod">
+        </root>
+    </springProfile>
+
+    <springProfile name="!test,!prod">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ASYNC_DEFAULT_FILE"/>
             <appender-ref ref="ASYNC_DEFAULT_ERROR"/>
-        </springProfile>
-    </root>
+        </root>
+    </springProfile>
 
 </configuration>

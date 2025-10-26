@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import com.example.investmentdatastreamservice.dto.FutureDto;
 import com.example.investmentdatastreamservice.dto.IndicativeDto;
+import com.example.investmentdatastreamservice.dto.LimitsDto;
 import com.example.investmentdatastreamservice.dto.ShareDto;
 import com.example.investmentdatastreamservice.entity.FutureEntity;
 import com.example.investmentdatastreamservice.entity.IndicativeEntity;
@@ -20,6 +21,7 @@ import com.example.investmentdatastreamservice.mapper.FutureMapper;
 import com.example.investmentdatastreamservice.mapper.IndicativeMapper;
 import com.example.investmentdatastreamservice.mapper.ShareMapper;
 import com.example.investmentdatastreamservice.service.CacheWarmupService;
+import com.example.investmentdatastreamservice.service.LimitsService;
 
 /**
  * REST контроллер для работы с финансовыми инструментами
@@ -49,13 +51,16 @@ public class InstrumentController {
     private final ShareMapper shareMapper;
     private final FutureMapper futureMapper;
     private final IndicativeMapper indicativeMapper;
+    private final LimitsService limitsService;
 
     public InstrumentController(CacheWarmupService cacheWarmupService, ShareMapper shareMapper, 
-                               FutureMapper futureMapper, IndicativeMapper indicativeMapper) {
+                               FutureMapper futureMapper, IndicativeMapper indicativeMapper,
+                               LimitsService limitsService) {
         this.cacheWarmupService = cacheWarmupService;
         this.shareMapper = shareMapper;
         this.futureMapper = futureMapper;
         this.indicativeMapper = indicativeMapper;
+        this.limitsService = limitsService;
     }
 
     /**
@@ -405,6 +410,299 @@ public class InstrumentController {
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
             response.put("error", "Ошибка при получении статистики: " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Получить лимиты для инструмента по FIGI из кэша
+     * 
+     * <p>
+     * Возвращает лимиты (верхний и нижний) для указанного инструмента из кэша.
+     * Данные берутся из кэша, который был прогрет при запуске приложения.
+     * </p>
+     * 
+     * <p>
+     * <strong>Пример запроса:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET /api/instruments/limits/BBG004730N88
+     * </pre>
+     * 
+     * @param figi FIGI инструмента
+     * @return лимиты инструмента из кэша
+     */
+    @GetMapping("/limits/{figi}")
+    public ResponseEntity<Map<String, Object>> getLimitsByFigi(@PathVariable String figi) {
+        try {
+            // Получаем лимиты ТОЛЬКО из кэша (без запроса к API)
+            LimitsDto limits = limitsService.getLimitsFromCache(figi);
+            
+            Map<String, Object> response = new HashMap<>();
+            if (limits != null) {
+                response.put("success", true);
+                response.put("figi", figi);
+                response.put("data", limits);
+                response.put("fromCache", true);
+            } else {
+                response.put("success", false);
+                response.put("error", "Лимиты для инструмента '" + figi + "' не найдены в кэше");
+                response.put("figi", figi);
+            }
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Ошибка при получении лимитов для инструмента '" + figi + "': " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Получить лимиты для всех акций из кэша
+     * 
+     * <p>
+     * Возвращает лимиты для всех акций из кэша. Данные берутся из кэша,
+     * который был прогрет при запуске приложения.
+     * </p>
+     * 
+     * <p>
+     * <strong>Пример запроса:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET /api/instruments/limits/shares
+     * </pre>
+     * 
+     * @return лимиты для всех акций из кэша
+     */
+    @GetMapping("/limits/shares")
+    public ResponseEntity<Map<String, Object>> getSharesLimits() {
+        try {
+            // Получаем акции из кэша и конвертируем в DTO
+            List<ShareEntity> shares = cacheWarmupService.getAllShares();
+            List<ShareDto> shareDtos = shareMapper.toDtoList(shares);
+            
+            List<Map<String, Object>> limitsList = new java.util.ArrayList<>();
+            
+            for (ShareDto share : shareDtos) {
+                if (share.getFigi() != null && !share.getFigi().trim().isEmpty()) {
+                    // Получаем лимиты ТОЛЬКО из кэша (без запроса к API)
+                    LimitsDto limits = limitsService.getLimitsFromCache(share.getFigi());
+                    if (limits != null) {
+                        Map<String, Object> limitData = new HashMap<>();
+                        limitData.put("figi", share.getFigi());
+                        limitData.put("ticker", share.getTicker());
+                        limitData.put("name", share.getName());
+                        limitData.put("limitDown", limits.getLimitDown());
+                        limitData.put("limitUp", limits.getLimitUp());
+                        limitsList.add(limitData);
+                    }
+                }
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("count", limitsList.size());
+            response.put("data", limitsList);
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Ошибка при получении лимитов акций: " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Получить лимиты для всех фьючерсов из кэша
+     * 
+     * <p>
+     * Возвращает лимиты для всех фьючерсов из кэша. Данные берутся из кэша,
+     * который был прогрет при запуске приложения.
+     * </p>
+     * 
+     * <p>
+     * <strong>Пример запроса:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET /api/instruments/limits/futures
+     * </pre>
+     * 
+     * @return лимиты для всех фьючерсов из кэша
+     */
+    @GetMapping("/limits/futures")
+    public ResponseEntity<Map<String, Object>> getFuturesLimits() {
+        try {
+            // Получаем фьючерсы из кэша и конвертируем в DTO
+            List<FutureEntity> futures = cacheWarmupService.getAllFutures();
+            List<FutureDto> futureDtos = futureMapper.toDtoList(futures);
+            
+            List<Map<String, Object>> limitsList = new java.util.ArrayList<>();
+            
+            for (FutureDto future : futureDtos) {
+                if (future.getFigi() != null && !future.getFigi().trim().isEmpty()) {
+                    // Получаем лимиты ТОЛЬКО из кэша (без запроса к API)
+                    LimitsDto limits = limitsService.getLimitsFromCache(future.getFigi());
+                    if (limits != null) {
+                        Map<String, Object> limitData = new HashMap<>();
+                        limitData.put("figi", future.getFigi());
+                        limitData.put("ticker", future.getTicker());
+                        limitData.put("basicAsset", future.getBasicAsset());
+                        limitData.put("limitDown", limits.getLimitDown());
+                        limitData.put("limitUp", limits.getLimitUp());
+                        limitsList.add(limitData);
+                    }
+                }
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("count", limitsList.size());
+            response.put("data", limitsList);
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Ошибка при получении лимитов фьючерсов: " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Получить статистику по лимитам из кэша
+     * 
+     * <p>
+     * Возвращает статистику по количеству инструментов с лимитами.
+     * Данные берутся из кэша, который был прогрет при запуске приложения.
+     * </p>
+     * 
+     * <p>
+     * <strong>Пример запроса:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET /api/instruments/limits/summary
+     * </pre>
+     * 
+     * @return статистика по лимитам из кэша
+     */
+    @GetMapping("/limits/summary")
+    public ResponseEntity<Map<String, Object>> getLimitsSummary() {
+        try {
+            // Получаем данные из кэша и конвертируем в DTO
+            List<ShareEntity> shares = cacheWarmupService.getAllShares();
+            List<FutureEntity> futures = cacheWarmupService.getAllFutures();
+            List<ShareDto> shareDtos = shareMapper.toDtoList(shares);
+            List<FutureDto> futureDtos = futureMapper.toDtoList(futures);
+            
+            int sharesWithLimits = 0;
+            int futuresWithLimits = 0;
+            int sharesWithoutLimits = 0;
+            int futuresWithoutLimits = 0;
+            
+            // Проверяем акции
+            for (ShareDto share : shareDtos) {
+                if (share.getFigi() != null && !share.getFigi().trim().isEmpty()) {
+                    // Получаем лимиты ТОЛЬКО из кэша (без запроса к API)
+                    LimitsDto limits = limitsService.getLimitsFromCache(share.getFigi());
+                    if (limits != null && limits.getLimitDown() != null && limits.getLimitUp() != null) {
+                        sharesWithLimits++;
+                    } else {
+                        sharesWithoutLimits++;
+                    }
+                }
+            }
+            
+            // Проверяем фьючерсы
+            for (FutureDto future : futureDtos) {
+                if (future.getFigi() != null && !future.getFigi().trim().isEmpty()) {
+                    // Получаем лимиты ТОЛЬКО из кэша (без запроса к API)
+                    LimitsDto limits = limitsService.getLimitsFromCache(future.getFigi());
+                    if (limits != null && limits.getLimitDown() != null && limits.getLimitUp() != null) {
+                        futuresWithLimits++;
+                    } else {
+                        futuresWithoutLimits++;
+                    }
+                }
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("shares", Map.of(
+                "withLimits", sharesWithLimits,
+                "withoutLimits", sharesWithoutLimits,
+                "total", sharesWithLimits + sharesWithoutLimits
+            ));
+            response.put("futures", Map.of(
+                "withLimits", futuresWithLimits,
+                "withoutLimits", futuresWithoutLimits,
+                "total", futuresWithLimits + futuresWithoutLimits
+            ));
+            response.put("total", Map.of(
+                "withLimits", sharesWithLimits + futuresWithLimits,
+                "withoutLimits", sharesWithoutLimits + futuresWithoutLimits,
+                "total", sharesWithLimits + sharesWithoutLimits + futuresWithLimits + futuresWithoutLimits
+            ));
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Ошибка при получении статистики лимитов: " + e.getMessage());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Получить статистику кэша лимитов
+     * 
+     * <p>
+     * Возвращает статистику кэша лимитов для отладки.
+     * </p>
+     * 
+     * <p>
+     * <strong>Пример запроса:</strong>
+     * </p>
+     * 
+     * <pre>
+     * GET /api/instruments/limits/cache-stats
+     * </pre>
+     * 
+     * @return статистика кэша лимитов
+     */
+    @GetMapping("/limits/cache-stats")
+    public ResponseEntity<Map<String, Object>> getLimitsCacheStats() {
+        try {
+            Map<String, Object> cacheStats = limitsService.getCacheStats();
+            Map<String, LimitsDto> allLimits = limitsService.getAllLimitsFromCache();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("cacheStats", cacheStats);
+            response.put("cachedLimitsCount", allLimits.size());
+            response.put("cachedLimits", allLimits.keySet());
+            response.put("timestamp", java.time.LocalDateTime.now().toString());
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Ошибка при получении статистики кэша: " + e.getMessage());
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
