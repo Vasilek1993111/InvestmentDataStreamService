@@ -1,209 +1,74 @@
 package com.example.investmentdatastreamservice.config;
 
+import io.github.cdimascio.dotenv.Dotenv;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 
-import java.util.Arrays;
-import java.util.List;
+import jakarta.annotation.PostConstruct;
 
 /**
- * Конфигурация и валидация окружения
+ * Конфигурация для загрузки переменных окружения из .env файлов
  * 
- * Проверяет корректность настроек для разных профилей и выводит предупреждения
- * о потенциальных проблемах конфигурации.
+ * Автоматически загружает соответствующий .env файл в зависимости от активного профиля Spring
+ * Должен инициализироваться самым первым
  */
 @Configuration
+@Order(Integer.MIN_VALUE)
 public class EnvironmentConfig {
 
-    private static final Logger log = LoggerFactory.getLogger(EnvironmentConfig.class);
+    private static final Logger logger = LoggerFactory.getLogger(EnvironmentConfig.class);
 
-    @Value("${spring.profiles.active:default}")
-    private String activeProfile;
-
-    @Value("${tinkoff.api.token:}")
-    private String tinkoffApiToken;
-
-    @Value("${spring.datasource.password:}")
-    private String dbPassword;
-
-    @Value("${server.port:8084}")
-    private int serverPort;
-
-    @Value("${spring.datasource.hikari.maximum-pool-size:20}")
-    private int maxPoolSize;
-
-    @Value("${app.performance.trade-insert-threads:12}")
-    private int tradeInsertThreads;
-
-    @Value("${app.performance.max-concurrent-inserts:200}")
-    private int maxConcurrentInserts;
-
-    /**
-     * Валидация конфигурации при запуске приложения
-     */
-    @EventListener(ApplicationReadyEvent.class)
-    public void validateConfiguration() {
-        log.info("=== ENVIRONMENT CONFIGURATION VALIDATION ===");
-        log.info("Active Profile: {}", activeProfile);
-        log.info("Server Port: {}", serverPort);
-        log.info("Max Pool Size: {}", maxPoolSize);
-        log.info("Trade Insert Threads: {}", tradeInsertThreads);
-        log.info("Max Concurrent Inserts: {}", maxConcurrentInserts);
-
-        validateProfileSpecificSettings();
-        validateSecuritySettings();
-        validatePerformanceSettings();
-        validateDatabaseSettings();
-
-        log.info("=== CONFIGURATION VALIDATION COMPLETED ===");
-    }
-
-    /**
-     * Валидация настроек для конкретного профиля
-     */
-    private void validateProfileSpecificSettings() {
-        List<String> validProfiles = Arrays.asList("test", "prod", "default");
-        
-        if (!validProfiles.contains(activeProfile)) {
-            log.warn("Unknown profile '{}'. Valid profiles: {}", activeProfile, validProfiles);
-        }
-
-        if ("test".equals(activeProfile)) {
-            validateTestProfile();
-        } else if ("prod".equals(activeProfile)) {
-            validateProdProfile();
+    @PostConstruct
+    public void loadEnvironmentVariables() {
+        try {
+            String activeProfile = System.getProperty("spring.profiles.active", "test");
+            String envFile = getEnvFileName(activeProfile);
+            
+            logger.info("Loading environment variables from: {}", envFile);
+            
+            Dotenv dotenv = Dotenv.configure()
+                .filename(envFile)
+                .ignoreIfMalformed()
+                .ignoreIfMissing()
+                .load();
+            
+            // Загружаем переменные в System Properties для Spring
+            dotenv.entries().forEach(entry -> {
+                String key = entry.getKey();
+                String value = entry.getValue();
+                
+                // Устанавливаем только если переменная еще не установлена
+                if (System.getProperty(key) == null) {
+                    System.setProperty(key, value);
+                    logger.debug("Loaded environment variable: {} = {}", key, 
+                        key.toLowerCase().contains("token") || key.toLowerCase().contains("password") 
+                            ? "***" : value);
+                }
+            });
+            
+            logger.info("Successfully loaded {} environment variables from {}", 
+                dotenv.entries().size(), envFile);
+            
+        } catch (Exception e) {
+            logger.error("Error loading environment variables from .env file: {}", e.getMessage());
+            logger.warn("Continuing with system environment variables only");
         }
     }
-
+    
     /**
-     * Валидация настроек для тестового профиля
+     * Определяет имя .env файла в зависимости от активного профиля
      */
-    @Profile("test")
-    private void validateTestProfile() {
-        log.info("Validating TEST profile settings...");
-        
-        if (maxPoolSize > 20) {
-            log.warn("TEST: High pool size ({}) for test environment. Consider reducing to save resources.", maxPoolSize);
+    private String getEnvFileName(String activeProfile) {
+        switch (activeProfile.toLowerCase()) {
+            case "test":
+                return ".env.test";
+            case "prod":
+            case "production":
+                return ".env.prod";
+            default:
+                return ".env";
         }
-        
-        if (tradeInsertThreads > 8) {
-            log.warn("TEST: High thread count ({}) for test environment. Consider reducing.", tradeInsertThreads);
-        }
-        
-        log.info("TEST profile validation completed");
-    }
-
-    /**
-     * Валидация настроек для продакшн профиля
-     */
-    @Profile("prod")
-    private void validateProdProfile() {
-        log.info("Validating PRODUCTION profile settings...");
-        
-        if (maxPoolSize < 30) {
-            log.warn("PROD: Low pool size ({}) for production. Consider increasing for better performance.", maxPoolSize);
-        }
-        
-        if (tradeInsertThreads < 16) {
-            log.warn("PROD: Low thread count ({}) for production. Consider increasing for better throughput.", tradeInsertThreads);
-        }
-        
-        if (maxConcurrentInserts < 100) {
-            log.warn("PROD: Low concurrent inserts limit ({}) for production. Consider increasing.", maxConcurrentInserts);
-        }
-        
-        log.info("PRODUCTION profile validation completed");
-    }
-
-    /**
-     * Валидация настроек безопасности
-     */
-    private void validateSecuritySettings() {
-        log.info("Validating security settings...");
-        
-        // Проверка токена API
-        if (tinkoffApiToken == null || tinkoffApiToken.trim().isEmpty()) {
-            log.error("SECURITY: Tinkoff API token is not set! Set TINKOFF_API_TOKEN environment variable.");
-        } else if ("test-token-please-replace".equals(tinkoffApiToken)) {
-            log.warn("SECURITY: Using default test token. Replace with real token for production!");
-        } else {
-            log.info("SECURITY: API token is configured (length: {})", tinkoffApiToken.length());
-            log.debug("SECURITY: Token starts with: {}", tinkoffApiToken.substring(0, Math.min(10, tinkoffApiToken.length())));
-        }
-        
-        // Дополнительная отладка
-        log.info("DEBUG: Active profile: {}", activeProfile);
-        log.info("DEBUG: Token value: {}", tinkoffApiToken != null ? "SET" : "NULL");
-        
-        // Проверка пароля БД
-        if (dbPassword == null || dbPassword.trim().isEmpty()) {
-            log.error("SECURITY: Database password is not set!");
-        } else if ("123password123".equals(dbPassword)) {
-            log.warn("SECURITY: Using default database password. Change for production!");
-        } else {
-            log.info("SECURITY: Database password is configured");
-        }
-        
-        log.info("Security validation completed");
-    }
-
-    /**
-     * Валидация настроек производительности
-     */
-    private void validatePerformanceSettings() {
-        log.info("Validating performance settings...");
-        
-        // Проверка соотношения потоков и пула соединений
-        int recommendedPoolSize = tradeInsertThreads * 2;
-        if (maxPoolSize < recommendedPoolSize) {
-            log.warn("PERFORMANCE: Pool size ({}) may be too low for thread count ({}). Recommended: {}", 
-                    maxPoolSize, tradeInsertThreads, recommendedPoolSize);
-        }
-        
-        // Проверка лимитов
-        if (maxConcurrentInserts > maxPoolSize * 2) {
-            log.warn("PERFORMANCE: Max concurrent inserts ({}) may exceed pool capacity ({}).", 
-                    maxConcurrentInserts, maxPoolSize);
-        }
-        
-        // Проверка порта
-        if (serverPort < 1024 && serverPort != 8084) {
-            log.warn("PERFORMANCE: Port {} may require elevated privileges.", serverPort);
-        }
-        
-        log.info("Performance validation completed");
-    }
-
-    /**
-     * Валидация настроек базы данных
-     */
-    private void validateDatabaseSettings() {
-        log.info("Validating database settings...");
-        
-        // Проверка пула соединений
-        if (maxPoolSize < 5) {
-            log.warn("DATABASE: Very low pool size ({}) may cause connection issues.", maxPoolSize);
-        }
-        
-        if (maxPoolSize > 100) {
-            log.warn("DATABASE: Very high pool size ({}) may cause resource exhaustion.", maxPoolSize);
-        }
-        
-        log.info("Database validation completed");
-    }
-
-    /**
-     * Получить информацию о конфигурации
-     */
-    public String getConfigurationInfo() {
-        return String.format(
-            "Profile: %s, Port: %d, Pool Size: %d, Threads: %d, Max Inserts: %d",
-            activeProfile, serverPort, maxPoolSize, tradeInsertThreads, maxConcurrentInserts
-        );
     }
 }

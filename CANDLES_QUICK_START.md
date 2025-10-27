@@ -12,6 +12,23 @@ GET    /api/candles/subscription/status   # Статус
 GET    /api/candles/subscription/stats    # Статистика
 ```
 
+## 🤖 Telegram Bot
+
+Для удобного мониторинга также доступен Telegram бот:
+
+```bash
+# Команды бота
+/start   # Запуск бота
+/help    # Список команд
+/status  # Статус сервиса
+```
+
+**Настройка:** Добавьте в `.env` файл:
+```bash
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_BOT_USERNAME=your_bot_username
+```
+
 ---
 
 ## 📖 Примеры cURL

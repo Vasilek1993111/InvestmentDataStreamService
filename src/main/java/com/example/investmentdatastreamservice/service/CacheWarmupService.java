@@ -6,7 +6,6 @@ import com.example.investmentdatastreamservice.entity.ShareEntity;
 import com.example.investmentdatastreamservice.repository.FutureRepository;
 import com.example.investmentdatastreamservice.repository.IndicativeRepository;
 import com.example.investmentdatastreamservice.repository.ShareRepository;
-import com.example.investmentdatastreamservice.service.LimitsService;
 import com.example.investmentdatastreamservice.dto.LimitsDto;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -204,29 +203,6 @@ public class CacheWarmupService {
         logger.info("Все кэши инструментов очищены");
     }
 
-    /**
-     * Очистить кэш акций
-     */
-    @CacheEvict(value = "sharesCache", allEntries = true)
-    public void evictSharesCache() {
-        logger.info("Кэш акций очищен");
-    }
-
-    /**
-     * Очистить кэш фьючерсов
-     */
-    @CacheEvict(value = "futuresCache", allEntries = true)
-    public void evictFuturesCache() {
-        logger.info("Кэш фьючерсов очищен");
-    }
-
-    /**
-     * Очистить кэш индикативных инструментов
-     */
-    @CacheEvict(value = "indicativesCache", allEntries = true)
-    public void evictIndicativesCache() {
-        logger.info("Кэш индикативных инструментов очищен");
-    }
 
     /**
      * Прогрев кэша лимитов для акций и фьючерсов

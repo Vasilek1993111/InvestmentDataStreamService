@@ -16,7 +16,6 @@ import ru.tinkoff.piapi.contract.v1.MarketDataStreamServiceGrpc;
 import ru.tinkoff.piapi.contract.v1.UsersServiceGrpc;
 import ru.tinkoff.piapi.core.InvestApi;
 import ru.tinkoff.piapi.core.MarketDataService;
-import io.github.cdimascio.dotenv.Dotenv;
 
 /**
  * Конфигурация gRPC клиентов для работы с T-Invest API
@@ -29,7 +28,7 @@ public class GrpcConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(GrpcConfig.class);
 
-    @Value("${tinkoff.api.token}")
+    @Value("${T_INVEST_TEST_TOKEN}")
     private String token;
 
     /**
@@ -122,65 +121,16 @@ public class GrpcConfig {
     @Bean
     public InvestApi investApi() {
         logger.info("=== CREATING INVEST API ===");
+        logger.info("Token loaded from Spring properties: {}", token != null && token.length() > 4 ? 
+            token.substring(0, 4) + "***" : "NULL");
         
-        // Загружаем токен напрямую из .env файла
-        String actualToken = loadTokenFromEnv();
-        
-        logger.info("Spring token length: {}", token != null ? token.length() : "NULL");
-        logger.info("Spring token starts with: {}", token != null && token.length() > 4 ? token.substring(0, 4) + "***" : "***");
-        logger.info("Actual token length: {}", actualToken != null ? actualToken.length() : "NULL");
-        logger.info("Actual token starts with: {}", actualToken != null && actualToken.length() > 4 ? actualToken.substring(0, 4) + "***" : "***");
+        if (token == null || token.trim().isEmpty() || "your-token-here".equals(token)) {
+            logger.error("Tinkoff API token is not properly configured!");
+            throw new IllegalStateException("Tinkoff API token is not configured. Please check your .env file.");
+        }
         
         logger.info("=== INVEST API CREATED ===");
-        return InvestApi.create(actualToken != null ? actualToken : token);
-    }
-    
-    /**
-     * Загружает токен напрямую из .env файла
-     */
-    private String loadTokenFromEnv() {
-        try {
-            // Определяем активный профиль
-            String activeProfile = System.getProperty("spring.profiles.active", "test");
-            String envFile = getEnvFileName(activeProfile);
-            
-            logger.info("Loading token from: {}", envFile);
-            
-            Dotenv dotenv = Dotenv.configure()
-                .filename(envFile)
-                .ignoreIfMalformed()
-                .ignoreIfMissing()
-                .load();
-            
-            String token = dotenv.get("T_INVEST_TEST_TOKEN");
-            if (token == null || token.trim().isEmpty()) {
-                logger.warn("T_INVEST_TEST_TOKEN not found in {}, using Spring value", envFile);
-                return token;
-            }
-            
-            logger.info("Successfully loaded token from {}", envFile);
-            return token;
-            
-        } catch (Exception e) {
-            logger.error("Error loading token from .env file: {}", e.getMessage());
-            logger.warn("Falling back to Spring property value");
-            return token;
-        }
-    }
-    
-    /**
-     * Определяет имя .env файла в зависимости от активного профиля
-     */
-    private String getEnvFileName(String activeProfile) {
-        switch (activeProfile.toLowerCase()) {
-            case "test":
-                return ".env.test";
-            case "prod":
-            case "production":
-                return ".env.prod";
-            default:
-                return ".env";
-        }
+        return InvestApi.create(token);
     }
 
     /**

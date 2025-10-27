@@ -146,6 +146,12 @@
             <version>1.5.5.Final</version>
             <scope>provided</scope>
         </dependency>
+       <!-- https://mvnrepository.com/artifact/org.telegram/telegrambots-spring-boot-starter -->
+<dependency>
+    <groupId>org.telegram</groupId>
+    <artifactId>telegrambots-spring-boot-starter</artifactId>
+    <version>6.9.7.1</version>
+</dependency>
     </dependencies>
 
     <build>

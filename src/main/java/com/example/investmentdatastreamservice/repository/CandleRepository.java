@@ -1,6 +1,6 @@
 package com.example.investmentdatastreamservice.repository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -35,10 +35,10 @@ public interface CandleRepository extends JpaRepository<MinuteCandleEntity, Minu
          * @param endTime конец периода
          * @return список свечей в указанном диапазоне
          */
-        @Query("SELECT c FROM MinuteCandleEntity c WHERE c.figi = :figi AND c.time >= :startTime AND c.time <= :endTime ORDER BY c.time ASC")
+        @Query(value = "SELECT * FROM invest.minute_candles WHERE figi = :figi AND time >= :startTime::timestamp AT TIME ZONE 'Europe/Moscow' AND time <= :endTime::timestamp AT TIME ZONE 'Europe/Moscow' ORDER BY time ASC", nativeQuery = true)
         List<MinuteCandleEntity> findByFigiAndTimeBetween(@Param("figi") String figi,
-                        @Param("startTime") LocalDateTime startTime,
-                        @Param("endTime") LocalDateTime endTime);
+                        @Param("startTime") Instant startTime,
+                        @Param("endTime") Instant endTime);
 
         /**
          * Находит свечи по FIGI в указанном временном диапазоне с сортировкой по времени
@@ -48,8 +48,9 @@ public interface CandleRepository extends JpaRepository<MinuteCandleEntity, Minu
          * @param endTime конец периода
          * @return список свечей в указанном диапазоне
          */
-        List<MinuteCandleEntity> findByFigiAndTimeBetweenOrderByTimeAsc(String figi,
-                        LocalDateTime startTime, LocalDateTime endTime);
+        @Query(value = "SELECT * FROM invest.minute_candles WHERE figi = :figi AND time >= :startTime::timestamp AT TIME ZONE 'Europe/Moscow' AND time <= :endTime::timestamp AT TIME ZONE 'Europe/Moscow' ORDER BY time ASC", nativeQuery = true)
+        List<MinuteCandleEntity> findByFigiAndTimeBetweenOrderByTimeAsc(@Param("figi") String figi,
+                        @Param("startTime") Instant startTime, @Param("endTime") Instant endTime);
 
         /**
          * Находит свечи по FIGI с пагинацией
@@ -70,8 +71,9 @@ public interface CandleRepository extends JpaRepository<MinuteCandleEntity, Minu
          * @param endTime конец периода
          * @return список свечей указанного типа
          */
-        List<MinuteCandleEntity> findByFigiAndCandleTypeAndTimeBetween(String figi, String candleType,
-                        LocalDateTime startTime, LocalDateTime endTime);
+        @Query(value = "SELECT * FROM invest.minute_candles WHERE figi = :figi AND candle_type = :candleType AND time >= :startTime::timestamp AT TIME ZONE 'Europe/Moscow' AND time <= :endTime::timestamp AT TIME ZONE 'Europe/Moscow' ORDER BY time ASC", nativeQuery = true)
+        List<MinuteCandleEntity> findByFigiAndCandleTypeAndTimeBetween(@Param("figi") String figi, @Param("candleType") String candleType,
+                        @Param("startTime") Instant startTime, @Param("endTime") Instant endTime);
 
         /**
          * Находит свечи с объемом больше указанного
@@ -82,8 +84,9 @@ public interface CandleRepository extends JpaRepository<MinuteCandleEntity, Minu
          * @param endTime конец периода
          * @return список свечей с высоким объемом
          */
-        List<MinuteCandleEntity> findByFigiAndVolumeGreaterThanAndTimeBetween(String figi, Long volume,
-                        LocalDateTime startTime, LocalDateTime endTime);
+        @Query(value = "SELECT * FROM invest.minute_candles WHERE figi = :figi AND volume > :volume AND time >= :startTime::timestamp AT TIME ZONE 'Europe/Moscow' AND time <= :endTime::timestamp AT TIME ZONE 'Europe/Moscow' ORDER BY time ASC", nativeQuery = true)
+        List<MinuteCandleEntity> findByFigiAndVolumeGreaterThanAndTimeBetween(@Param("figi") String figi, @Param("volume") Long volume,
+                        @Param("startTime") Instant startTime, @Param("endTime") Instant endTime);
 
         /**
          * Находит последнюю свечу для указанного инструмента
@@ -118,8 +121,8 @@ public interface CandleRepository extends JpaRepository<MinuteCandleEntity, Minu
          * @param time время свечи
          */
         @Modifying
-        @Query("UPDATE MinuteCandleEntity c SET c.isComplete = true, c.updatedAt = CURRENT_TIMESTAMP WHERE c.figi = :figi AND c.time = :time")
-        void markCandleAsComplete(@Param("figi") String figi, @Param("time") LocalDateTime time);
+        @Query(value = "UPDATE invest.minute_candles SET is_complete = true, updated_at = NOW() WHERE figi = :figi AND time = :time::timestamp AT TIME ZONE 'Europe/Moscow'", nativeQuery = true)
+        void markCandleAsComplete(@Param("figi") String figi, @Param("time") Instant time);
 
         /**
          * Удаляет старые свечи (старше указанной даты)
@@ -128,8 +131,8 @@ public interface CandleRepository extends JpaRepository<MinuteCandleEntity, Minu
          * @return количество удаленных записей
          */
         @Modifying
-        @Query("DELETE FROM MinuteCandleEntity c WHERE c.time < :beforeDate")
-        int deleteOldCandles(@Param("beforeDate") LocalDateTime beforeDate);
+        @Query(value = "DELETE FROM invest.minute_candles WHERE time < :beforeDate::timestamp AT TIME ZONE 'Europe/Moscow'", nativeQuery = true)
+        int deleteOldCandles(@Param("beforeDate") Instant beforeDate);
 
         /**
          * Подсчитывает количество свечей для указанного инструмента
@@ -146,7 +149,7 @@ public interface CandleRepository extends JpaRepository<MinuteCandleEntity, Minu
          * @param endTime конец периода
          * @return количество свечей в диапазоне
          */
-        @Query("SELECT COUNT(c) FROM MinuteCandleEntity c WHERE c.time >= :startTime AND c.time <= :endTime")
-        long countByTimeBetween(@Param("startTime") LocalDateTime startTime,
-                        @Param("endTime") LocalDateTime endTime);
+        @Query(value = "SELECT COUNT(*) FROM invest.minute_candles WHERE time >= :startTime::timestamp AT TIME ZONE 'Europe/Moscow' AND time <= :endTime::timestamp AT TIME ZONE 'Europe/Moscow'", nativeQuery = true)
+        long countByTimeBetween(@Param("startTime") Instant startTime,
+                        @Param("endTime") Instant endTime);
 }

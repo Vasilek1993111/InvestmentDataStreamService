@@ -5,6 +5,10 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           MarketDataStreamingService                            │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐            │
+│  │  REST API       │    │  Telegram Bot   │    │  Cache Service  │            │
+│  │  (Monitoring)   │    │  (Notifications)│    │  (Instruments)  │            │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘            │
 └─────────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -174,6 +178,8 @@ Trade → processTrade() → TradeEntity {
 - `MarketDataStreamingService` - Main processing service
 - `TradeBatchRepository` - High-performance database operations
 - `StreamingServiceController` - REST API for monitoring
+- `TgBotService` - Telegram bot for notifications and monitoring
+- `CacheWarmupService` - Instrument cache management
 
 ### **Entities:**
 

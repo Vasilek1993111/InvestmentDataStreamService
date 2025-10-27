@@ -63,15 +63,14 @@ public class MinuteCandleEntity {
     @Column(name = "average_price", precision = 18, scale = 2)
     private BigDecimal averagePrice;
     
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private Instant createdAt;
     
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
     private Instant updatedAt;
 
     public MinuteCandleEntity() {
-        this.createdAt = ZonedDateTime.now(ZoneId.of("Europe/Moscow")).toInstant();
-        this.updatedAt = ZonedDateTime.now(ZoneId.of("Europe/Moscow")).toInstant();
+        // created_at и updated_at устанавливаются автоматически БД
     }
 
     public MinuteCandleEntity(String figi, long volume, BigDecimal high, BigDecimal low, 
@@ -126,10 +125,7 @@ public class MinuteCandleEntity {
         return moscowTime.toInstant();
     }
 
-    @PreUpdate
-    public void preUpdate() {
-        this.updatedAt = ZonedDateTime.now(ZoneId.of("Europe/Moscow")).toInstant();
-    }
+    // @PreUpdate убран - updated_at обновляется автоматически триггером БД
 
     // Getters and Setters
     public String getFigi() { return figi; }
