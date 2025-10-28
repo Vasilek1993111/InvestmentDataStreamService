@@ -1,7 +1,7 @@
 package com.example.investmentdatastreamservice.mapper;
 
 import com.example.investmentdatastreamservice.dto.*;
-import com.example.investmentdatastreamservice.service.MarketDataStreamingService.ServiceStats;
+import com.example.investmentdatastreamservice.service.MarketDataStreamingServiceAdapter.ServiceStats;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.factory.Mappers;

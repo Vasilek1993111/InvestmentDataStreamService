@@ -8,23 +8,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.example.investmentdatastreamservice.dto.*;
 import com.example.investmentdatastreamservice.mapper.StatsMapper;
-import com.example.investmentdatastreamservice.service.MarketDataStreamingService;
-import com.example.investmentdatastreamservice.service.MarketDataStreamingService.ServiceStats;
+import com.example.investmentdatastreamservice.service.MarketDataStreamingServiceAdapter;
+import com.example.investmentdatastreamservice.service.MarketDataStreamingServiceAdapter.ServiceStats;
 
 /**
  * REST контроллер для мониторинга и управления потоковым сервисом
  * 
  * Предоставляет endpoints для мониторинга производительности и управления потоковым сервисом
- * данных.
+ * данных. Использует новую архитектуру под капотом через MarketDataStreamingServiceAdapter
+ * для обеспечения обратной совместимости.
  */
 @RestController
 @RequestMapping("/api/streaming-service")
 public class StreamingServiceController {
 
-    private final MarketDataStreamingService streamingService;
+    private final MarketDataStreamingServiceAdapter streamingService;
     private final StatsMapper statsMapper;
 
-    public StreamingServiceController(MarketDataStreamingService streamingService, StatsMapper statsMapper) {
+    public StreamingServiceController(MarketDataStreamingServiceAdapter streamingService, StatsMapper statsMapper) {
         this.streamingService = streamingService;
         this.statsMapper = statsMapper;
     }
@@ -52,6 +53,10 @@ public class StreamingServiceController {
      * <li>Trades - обезличенные сделки</li>
      * </ul>
      * 
+     * <p>
+     * Теперь использует новую архитектуру под капотом для улучшенной производительности.
+     * </p>
+     * 
      * @return HTTP 200 OK при успешном запуске
      */
     @PostMapping("/start")
@@ -59,8 +64,9 @@ public class StreamingServiceController {
         try {
             streamingService.startStreaming();
             Map<String, Object> response =
-                    Map.of("success", true, "message", "Стриминг данных успешно запущен",
-                            "timestamp", java.time.LocalDateTime.now().toString());
+                    Map.of("success", true, "message", "Стриминг данных успешно запущен ",
+                            "timestamp", java.time.LocalDateTime.now().toString(),
+                            "architecture", "v2");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, Object> response = Map.of("success", false, "message",
@@ -77,6 +83,10 @@ public class StreamingServiceController {
      * Останавливает получение данных от T-Invest API.
      * </p>
      * 
+     * <p>
+     * Теперь использует новую архитектуру под капотом для корректной остановки всех сервисов.
+     * </p>
+     * 
      * @return HTTP 200 OK при успешной остановке
      */
     @PostMapping("/stop")
@@ -84,8 +94,9 @@ public class StreamingServiceController {
         try {
             streamingService.stopStreaming();
             Map<String, Object> response =
-                    Map.of("success", true, "message", "Стриминг данных успешно остановлен",
-                            "timestamp", java.time.LocalDateTime.now().toString());
+                    Map.of("success", true, "message", "Стриминг данных успешно остановлен ",
+                            "timestamp", java.time.LocalDateTime.now().toString(),
+                            "architecture", "v2");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, Object> response = Map.of("success", false, "message",
@@ -98,6 +109,10 @@ public class StreamingServiceController {
     /**
      * Принудительное переподключение к T-Invest API
      * 
+     * <p>
+     * Теперь использует новую архитектуру для переподключения всех сервисов с улучшенной логикой.
+     * </p>
+     * 
      * @return HTTP 200 OK при успешном запросе переподключения
      */
     @PostMapping("/reconnect")
@@ -105,8 +120,9 @@ public class StreamingServiceController {
         try {
             streamingService.forceReconnect();
             Map<String, Object> response =
-                    Map.of("success", true, "message", "Переподключение инициировано", "timestamp",
-                            java.time.LocalDateTime.now().toString());
+                    Map.of("success", true, "message", "Переподключение инициировано ", 
+                           "timestamp", java.time.LocalDateTime.now().toString(),
+                           "architecture", "v2");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, Object> response = Map.of("success", false, "message",

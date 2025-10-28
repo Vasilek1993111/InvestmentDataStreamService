@@ -22,6 +22,9 @@ public class TgBotService extends TelegramLongPollingBot {
 
     @Value("${TELEGRAM_BOT_USERNAME}")
     private String botUsername;
+    
+    @Value("${telegram.limit.channel.id:}")
+    private String limitChannelId;
 
     private volatile boolean isInitialized = false;
 
@@ -33,6 +36,7 @@ public class TgBotService extends TelegramLongPollingBot {
             logger.info("╠════════════════════════════════════════════════════════════╣");
             logger.info("║ Bot Username: {}", botUsername != null ? botUsername : "NOT SET");
             logger.info("║ Bot Token: {}", botToken != null ? "***SET***" : "NOT SET");
+            logger.info("║ Limit Channel ID: {}", limitChannelId != null && !limitChannelId.trim().isEmpty() ? limitChannelId : "NOT SET");
             logger.info("║ Status: {}", botToken != null && botUsername != null ? "READY" : "NOT READY");
             logger.info("╚════════════════════════════════════════════════════════════╝");
             isInitialized = true;
@@ -112,13 +116,26 @@ public class TgBotService extends TelegramLongPollingBot {
 
     public void sendText(String chatId, String text) {
         try {
+            logger.info("📤 Попытка отправки сообщения в Telegram чат: {}", chatId);
+            logger.debug("📝 Содержимое сообщения: {}", text);
+            
             SendMessage message = new SendMessage();
             message.setChatId(chatId);
             message.setText(text);
             execute(message);
-            logger.info("✅ Message sent successfully to chat: {}", chatId);
+            
+            logger.info("✅ Сообщение успешно отправлено в Telegram чат: {}", chatId);
         } catch (TelegramApiException e) {
-            logger.error("❌ Error sending message to chat {}: {}", chatId, e.getMessage(), e);
+            logger.error("❌ Ошибка при отправке сообщения в Telegram чат {}: {}", chatId, e.getMessage(), e);
+            
+            // Дополнительная информация об ошибке
+            if (e.getMessage().contains("chat not found")) {
+                logger.error("💡 Возможные причины: чат не найден, бот не добавлен в чат, или неверный ID чата");
+            } else if (e.getMessage().contains("bot was blocked")) {
+                logger.error("💡 Бот заблокирован пользователем или удален из чата");
+            } else if (e.getMessage().contains("Forbidden")) {
+                logger.error("💡 У бота нет прав на отправку сообщений в этот чат");
+            }
         }
     }
 
