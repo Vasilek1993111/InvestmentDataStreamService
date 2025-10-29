@@ -52,7 +52,7 @@ public class LimitMonitorService {
     private String telegramChannelId;
     
     // Порог приближения к лимиту (1%)
-    private static final BigDecimal APPROACH_THRESHOLD = new BigDecimal("0.2");
+    private static final BigDecimal APPROACH_THRESHOLD = new BigDecimal("0.01");
     
     public LimitMonitorService(
             LimitsService limitsService,
