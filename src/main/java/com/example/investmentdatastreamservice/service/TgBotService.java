@@ -139,19 +139,5 @@ public class TgBotService extends TelegramLongPollingBot {
         }
     }
 
-    /**
-     * Отправка уведомления всем подписчикам
-     */
-    public void sendNotification(String message) {
-        logger.info("📢 Sending notification to all subscribers");
-        // TODO: Реализовать отправку уведомлений всем подписчикам
-    }
-
-    /**
-     * Отправка уведомления конкретному пользователю
-     */
-    public void sendNotificationToUser(String chatId, String message) {
-        logger.info("📢 Sending notification to chat: {}", chatId);
-        sendText(chatId, message);
-    }
+    
 }

@@ -18,13 +18,15 @@ import com.github.benmanes.caffeine.cache.Caffeine;
  * <li><strong>sharesCache</strong> - кэш акций</li>
  * <li><strong>futuresCache</strong> - кэш фьючерсов</li>
  * <li><strong>indicativesCache</strong> - кэш индикативных инструментов</li>
+ * <li><strong>limitsCache</strong> - кэш лимитов инструментов</li>
+ * <li><strong>notificationsCache</strong> - кэш уведомлений о лимитах</li>
  * </ul>
  * 
  * <p>
  * Использует Caffeine в качестве провайдера кэша с настройками:
  * </p>
  * <ul>
- * <li>Максимальный размер кэша: 10,000 записей</li>
+ * <li>Максимальный размер кэша: 10,000 записей (для всех кэшей)</li>
  * <li>Время жизни записи после записи: 24 часа</li>
  * <li>Время жизни записи после последнего доступа: 12 часов</li>
  * </ul>
@@ -44,7 +46,7 @@ public class CacheConfig {
      * Настройки кэша:
      * </p>
      * <ul>
-     * <li>Максимальное количество записей: 10,000</li>
+     * <li>Максимальное количество записей: 10,000 (для всех кэшей)</li>
      * <li>Время жизни после записи: 24 часа</li>
      * <li>Время жизни после доступа: 12 часов</li>
      * <li>Запись статистики использования кэша</li>
@@ -55,7 +57,7 @@ public class CacheConfig {
     @Bean
     public CacheManager cacheManager() {
         CaffeineCacheManager cacheManager =
-                new CaffeineCacheManager("sharesCache", "futuresCache", "indicativesCache", "limitsCache");
+                new CaffeineCacheManager("sharesCache", "futuresCache", "indicativesCache", "limitsCache", "notificationsCache");
 
         cacheManager.setCaffeine(
                 Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(24, TimeUnit.HOURS)

@@ -11,6 +11,8 @@ import com.example.investmentdatastreamservice.repository.TradeRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -19,7 +21,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -38,9 +39,7 @@ public class LimitMonitorService {
     private final ShareRepository shareRepository;
     private final FutureRepository futureRepository;
     private final TradeRepository tradeRepository;
-    
-    // Кэш для отслеживания отправленных уведомлений за день
-    private final Map<String, LocalDate> dailyNotifications = new ConcurrentHashMap<>();
+    private final CacheManager cacheManager;
     
     // Счетчики для статистики
     private final AtomicLong totalAlertsProcessed = new AtomicLong(0);
@@ -59,12 +58,14 @@ public class LimitMonitorService {
             TgBotService telegramBotService,
             ShareRepository shareRepository,
             FutureRepository futureRepository,
-            TradeRepository tradeRepository) {
+            TradeRepository tradeRepository,
+            CacheManager cacheManager) {
         this.limitsService = limitsService;
         this.telegramBotService = telegramBotService;
         this.shareRepository = shareRepository;
         this.futureRepository = futureRepository;
         this.tradeRepository = tradeRepository;
+        this.cacheManager = cacheManager;
         
         // Логируем информацию о настройке Telegram канала
         logger.info("🔧 Инициализация LimitMonitorService");
@@ -236,10 +237,17 @@ public class LimitMonitorService {
                             (alert.isLimitReached() ? "REACHED" : "APPROACHING");
             LocalDate today = LocalDate.now();
             
-            if (dailyNotifications.containsKey(alertKey) && 
-                dailyNotifications.get(alertKey).equals(today)) {
-                logger.debug("Уведомление для {} уже отправлено сегодня", alertKey);
-                return;
+            // Проверяем кэш уведомлений в Caffeine
+            Cache notificationsCache = cacheManager.getCache("notificationsCache");
+            if (notificationsCache != null) {
+                Cache.ValueWrapper wrapper = notificationsCache.get(alertKey);
+                if (wrapper != null && wrapper.get() != null) {
+                    LocalDate cachedDate = (LocalDate) wrapper.get();
+                    if (cachedDate.equals(today)) {
+                        logger.debug("Уведомление для {} уже отправлено сегодня", alertKey);
+                        return;
+                    }
+                }
             }
             
             // Формируем сообщение
@@ -270,8 +278,11 @@ public class LimitMonitorService {
             }
             notificationsSent.incrementAndGet();
             
-            // Сохраняем информацию об отправленном уведомлении
-            dailyNotifications.put(alertKey, today);
+            // Сохраняем информацию об отправленном уведомлении в кэш Caffeine
+            if (notificationsCache != null) {
+                notificationsCache.put(alertKey, today);
+                logger.debug("Уведомление для {} сохранено в кэш Caffeine", alertKey);
+            }
             
         } catch (Exception e) {
             logger.error("Ошибка при отправке уведомления о лимите: {}", e.getMessage(), e);
@@ -354,23 +365,53 @@ public class LimitMonitorService {
     
     /**
      * Очистка кэша уведомлений (вызывается ежедневно)
+     * 
+     * <p>
+     * Удаляет все записи из кэша уведомлений. Caffeine автоматически удалит
+     * записи по истечении TTL (24 часа), но для гарантированной очистки
+     * старых записей выполняется ручная очистка.
+     * </p>
      */
     public void clearDailyNotifications() {
-        LocalDate today = LocalDate.now();
-        dailyNotifications.entrySet().removeIf(entry -> !entry.getValue().equals(today));
-        logger.info("Очищен кэш уведомлений за предыдущие дни");
+        try {
+            Cache notificationsCache = cacheManager.getCache("notificationsCache");
+            if (notificationsCache != null) {
+                // Очищаем весь кэш уведомлений
+                notificationsCache.clear();
+                logger.info("✅ Кэш уведомлений (Caffeine) очищен");
+            } else {
+                logger.warn("⚠️ Кэш 'notificationsCache' не найден");
+            }
+        } catch (Exception e) {
+            logger.error("❌ Ошибка при очистке кэша уведомлений: {}", e.getMessage(), e);
+        }
     }
     
     /**
      * Получение статистики мониторинга лимитов
      */
     public Map<String, Object> getStatistics() {
+        // Получаем размер кэша уведомлений из Caffeine
+        long notificationsCacheSize = 0;
+        try {
+            Cache notificationsCache = cacheManager.getCache("notificationsCache");
+            if (notificationsCache != null && notificationsCache.getNativeCache() instanceof 
+                    com.github.benmanes.caffeine.cache.Cache) {
+                @SuppressWarnings("unchecked")
+                com.github.benmanes.caffeine.cache.Cache<String, LocalDate> caffeineCache = 
+                    (com.github.benmanes.caffeine.cache.Cache<String, LocalDate>) notificationsCache.getNativeCache();
+                notificationsCacheSize = caffeineCache.estimatedSize();
+            }
+        } catch (Exception e) {
+            logger.debug("Ошибка при получении размера кэша уведомлений: {}", e.getMessage());
+        }
+        
         return Map.of(
             "totalAlertsProcessed", totalAlertsProcessed.get(),
             "approachingLimitAlerts", approachingLimitAlerts.get(),
             "limitReachedAlerts", limitReachedAlerts.get(),
             "notificationsSent", notificationsSent.get(),
-            "dailyNotificationsCount", dailyNotifications.size(),
+            "dailyNotificationsCount", notificationsCacheSize,
             "telegramChannelConfigured", telegramChannelId != null && !telegramChannelId.trim().isEmpty()
         );
     }

@@ -10,6 +10,10 @@ import org.springframework.stereotype.Service;
 
 import com.example.investmentdatastreamservice.dto.LimitsDto;
 import com.example.investmentdatastreamservice.utils.QuotationUtils;
+import com.example.investmentdatastreamservice.repository.ShareRepository;
+import com.example.investmentdatastreamservice.repository.FutureRepository;
+import com.example.investmentdatastreamservice.entity.ShareEntity;
+import com.example.investmentdatastreamservice.entity.FutureEntity;
 
 import ru.tinkoff.piapi.core.MarketDataService;
 import ru.tinkoff.piapi.contract.v1.GetOrderBookResponse;
@@ -17,16 +21,22 @@ import ru.tinkoff.piapi.contract.v1.Quotation;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 
 @Service
 public class LimitsService {
     private static final Logger logger = LoggerFactory.getLogger(LimitsService.class);
     private final MarketDataService marketDataService;
     private final CacheManager cacheManager;
+    private final ShareRepository shareRepository;
+    private final FutureRepository futureRepository;
     
-    public LimitsService(MarketDataService marketDataService, CacheManager cacheManager) {
+    public LimitsService(MarketDataService marketDataService, CacheManager cacheManager,
+                        ShareRepository shareRepository, FutureRepository futureRepository) {
         this.marketDataService = marketDataService;
         this.cacheManager = cacheManager;
+        this.shareRepository = shareRepository;
+        this.futureRepository = futureRepository;
     }
 
     /**
@@ -199,6 +209,97 @@ public class LimitsService {
         } catch (Exception e) {
             logger.error("Ошибка при получении статистики кэша: {}", e.getMessage());
         }
+        return stats;
+    }
+
+    /**
+     * Обновить кэш лимитов для всех инструментов (акций и фьючерсов)
+     * 
+     * <p>
+     * Загружает лимиты для всех акций и фьючерсов из API и обновляет кэш.
+     * Используется для периодического обновления кэша в рабочее время.
+     * </p>
+     * 
+     * @return статистика обновления: количество успешно обновленных, ошибок и пропущенных инструментов
+     */
+    public Map<String, Integer> refreshLimitsCache() {
+        logger.info("🔄 Начинается обновление кэша лимитов для всех инструментов...");
+        
+        long startTime = System.currentTimeMillis();
+        int successCount = 0;
+        int errorCount = 0;
+        int skippedCount = 0;
+
+        // Обновляем лимиты для акций
+        logger.info("📈 Обновление лимитов для акций...");
+        List<ShareEntity> shares = shareRepository.findAll();
+        for (ShareEntity share : shares) {
+            if (share.getFigi() != null && !share.getFigi().trim().isEmpty()) {
+                try {
+                    logger.debug("🔄 Обновление лимитов для акции: {} ({})", share.getTicker(), share.getFigi());
+                    // Вызываем getLimits - получаем данные из API и сохраняем в кэш
+                    LimitsDto limits = getLimits(share.getFigi());
+                    if (limits != null && limits.getLimitDown() != null && limits.getLimitUp() != null) {
+                        // Принудительно сохраняем в кэш (так как @Cacheable не работает при вызове изнутри класса)
+                        saveLimitsToCache(share.getFigi(), limits);
+                        successCount++;
+                        logger.debug("✅ Акция {} - лимиты обновлены и сохранены в кэш", share.getTicker());
+                    } else {
+                        errorCount++;
+                        logger.debug("⚠️ Акция {} - лимиты пустые", share.getTicker());
+                    }
+                } catch (Exception e) {
+                    errorCount++;
+                    logger.debug("❌ Ошибка при обновлении лимитов для акции {}: {}", 
+                            share.getFigi(), e.getMessage());
+                }
+            } else {
+                skippedCount++;
+            }
+        }
+
+        // Обновляем лимиты для фьючерсов
+        logger.info("📈 Обновление лимитов для фьючерсов...");
+        List<FutureEntity> futures = futureRepository.findAll();
+        for (FutureEntity future : futures) {
+            if (future.getFigi() != null && !future.getFigi().trim().isEmpty()) {
+                try {
+                    logger.debug("🔄 Обновление лимитов для фьючерса: {} ({})", future.getTicker(), future.getFigi());
+                    // Вызываем getLimits - получаем данные из API и сохраняем в кэш
+                    LimitsDto limits = getLimits(future.getFigi());
+                    if (limits != null && limits.getLimitDown() != null && limits.getLimitUp() != null) {
+                        // Принудительно сохраняем в кэш (так как @Cacheable не работает при вызове изнутри класса)
+                        saveLimitsToCache(future.getFigi(), limits);
+                        successCount++;
+                        logger.debug("✅ Фьючерс {} - лимиты обновлены и сохранены в кэш", future.getTicker());
+                    } else {
+                        errorCount++;
+                        logger.debug("⚠️ Фьючерс {} - лимиты пустые", future.getTicker());
+                    }
+                } catch (Exception e) {
+                    errorCount++;
+                    logger.debug("❌ Ошибка при обновлении лимитов для фьючерса {}: {}", 
+                            future.getFigi(), e.getMessage());
+                }
+            } else {
+                skippedCount++;
+            }
+        }
+
+        long duration = System.currentTimeMillis() - startTime;
+        logger.info("✅ Обновление кэша лимитов завершено за {} мс. Успешно: {}, Ошибок: {}, Пропущено: {}", 
+                duration, successCount, errorCount, skippedCount);
+        
+        if (errorCount > 0) {
+            logger.warn("⚠️ При обновлении кэша лимитов произошло {} ошибок. Проверьте подключение к Tinkoff API и токен аутентификации.", errorCount);
+        }
+
+        Map<String, Integer> stats = new HashMap<>();
+        stats.put("successCount", successCount);
+        stats.put("errorCount", errorCount);
+        stats.put("skippedCount", skippedCount);
+        stats.put("durationMs", (int) duration);
+        
         return stats;
     }
 }

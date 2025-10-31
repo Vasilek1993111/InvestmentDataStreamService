@@ -69,3 +69,4 @@ public interface StreamingService<T> {
     Class<T> getDataType();
 }
 
+

@@ -6,7 +6,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Service;
+import org.springframework.core.annotation.Order;
 
 import com.example.investmentdatastreamservice.repository.FutureRepository;
 import com.example.investmentdatastreamservice.repository.IndicativeRepository;
@@ -17,6 +19,11 @@ import com.example.investmentdatastreamservice.service.streaming.StreamingMetric
 import com.example.investmentdatastreamservice.service.streaming.StreamingService;
 
 import io.grpc.stub.StreamObserver;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import ru.tinkoff.piapi.contract.v1.LastPrice;
 import ru.tinkoff.piapi.contract.v1.LastPriceInstrument;
 import ru.tinkoff.piapi.contract.v1.MarketDataRequest;
@@ -30,8 +37,15 @@ import ru.tinkoff.piapi.contract.v1.SubscriptionAction;
  * 
  * Специализированный сервис для отслеживания приближения к лимитам инструментов
  * и отправки уведомлений в Telegram при достижении пороговых значений.
+ * 
+ * <p>
+ * Автоматически запускается при старте приложения для непрерывного мониторинга
+ * лимитов инструментов и отправки уведомлений в Telegram.
+ * </p>
  */
 @Service
+@DependsOn("cacheWarmupService") // Зависит только от прогрева кэша
+@Order(100) // Запускается после кэша и других сервисов
 public class LimitMonitoringStreamingService implements StreamingService<LastPrice> {
     
     private static final Logger log = LoggerFactory.getLogger(LimitMonitoringStreamingService.class);
@@ -44,6 +58,11 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
     
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
     private final StreamingMetrics metrics;
+    private final ScheduledExecutorService startupScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "limit-monitoring-startup-scheduler");
+        t.setDaemon(true);
+        return t;
+    });
     
     public LimitMonitoringStreamingService(
             GrpcConnectionManager connectionManager,
@@ -61,6 +80,59 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
         
         // Настраиваем обработчик ответов
         setupResponseObserver();
+    }
+    
+    /**
+     * Автоматический запуск сервиса при старте приложения
+     * 
+     * <p>
+     * Сервис автоматически запускается после инициализации всех зависимостей
+     * (кэш инструментов, кэш лимитов, репозитории) для начала мониторинга лимитов.
+     * </p>
+     * 
+     * <p>
+     * Выполняет:
+     * - Подписку на LastPrice для всех инструментов
+     * - Начало отслеживания приближения к лимитам
+     * - Отправку уведомлений в Telegram при достижении пороговых значений
+     * </p>
+     * 
+     * <p>
+     * Использует ScheduledExecutorService для запуска с небольшой задержкой,
+     * чтобы гарантировать полную инициализацию всех зависимостей (кэш лимитов).
+     * </p>
+     */
+    @PostConstruct
+    public void autoStart() {
+        log.info("=== АВТОМАТИЧЕСКИЙ ЗАПУСК СЕРВИСА МОНИТОРИНГА ЛИМИТОВ ===");
+        log.info("🚀 Сервис мониторинга лимитов будет запущен автоматически...");
+        log.info("📊 Будет отслеживаться приближение к лимитам всех инструментов");
+        log.info("📤 Уведомления будут отправляться в Telegram канал");
+        log.info("⏳ Ожидание инициализации зависимостей (кэш лимитов)...");
+        
+        // Запускаем сервис с небольшой задержкой для обеспечения готовности всех зависимостей
+        // (кэш лимитов должен быть прогрет через CacheWarmupService)
+        startupScheduler.schedule(() -> {
+            try {
+                log.info("▶️ Запуск сервиса мониторинга лимитов...");
+                start().whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        log.error("❌ Ошибка при автоматическом запуске сервиса мониторинга лимитов", throwable);
+                        log.info("💡 Сервис можно запустить вручную через API: POST /api/limit-monitoring/start");
+                    } else {
+                        log.info("✅ Сервис мониторинга лимитов успешно запущен и готов к работе");
+                        log.info("📊 Начато отслеживание лимитов для всех инструментов");
+                        log.info("📤 Уведомления будут отправляться в Telegram при приближении к лимитам (1%) или достижении");
+                        log.info("🔄 Автоматическое переподключение настроено");
+                        log.info("================================================================");
+                    }
+                });
+                
+            } catch (Exception e) {
+                log.error("Ошибка при автоматическом запуске сервиса мониторинга лимитов", e);
+                log.info("💡 Сервис можно запустить вручную через API: POST /api/limit-monitoring/start");
+            }
+        }, 3, TimeUnit.SECONDS);
     }
     
     @Override
@@ -328,6 +400,35 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
                     start();
                 }
             });
+        }
+    }
+    
+    /**
+     * Корректное завершение работы сервиса
+     */
+    @PreDestroy
+    public void shutdown() {
+        log.info("Завершение работы сервиса мониторинга лимитов...");
+        
+        // Останавливаем планировщик запуска
+        startupScheduler.shutdown();
+        try {
+            if (!startupScheduler.awaitTermination(2, TimeUnit.SECONDS)) {
+                startupScheduler.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            startupScheduler.shutdownNow();
+        }
+        
+        // Останавливаем сервис
+        if (isRunning.get()) {
+            try {
+                stop().get(30, TimeUnit.SECONDS);
+                log.info("Сервис мониторинга лимитов корректно остановлен");
+            } catch (Exception e) {
+                log.error("Ошибка при остановке сервиса мониторинга лимитов", e);
+            }
         }
     }
 }

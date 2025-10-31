@@ -17,9 +17,11 @@ public class LimitMonitoringScheduler {
     private static final Logger logger = LoggerFactory.getLogger(LimitMonitoringScheduler.class);
     
     private final LimitMonitorService limitMonitorService;
+    private final LimitsService limitsService;
     
-    public LimitMonitoringScheduler(LimitMonitorService limitMonitorService) {
+    public LimitMonitoringScheduler(LimitMonitorService limitMonitorService, LimitsService limitsService) {
         this.limitMonitorService = limitMonitorService;
+        this.limitsService = limitsService;
     }
     
     /**
@@ -63,6 +65,56 @@ public class LimitMonitoringScheduler {
             
         } catch (Exception e) {
             logger.error("❌ Ошибка при генерации еженедельной статистики: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Обновление кэша лимитов в 14:00 по рабочим дням
+     * 
+     * Выполняется каждый рабочий день (понедельник-пятница) в 14:00 по московскому времени
+     * для обновления кэша лимитов всех инструментов (акций и фьючерсов).
+     * Это позволяет поддерживать актуальные данные лимитов в течение торгового дня.
+     */
+    @Scheduled(cron = "0 0 14 * * MON-FRI", zone = "Europe/Moscow")
+    public void refreshLimitsCacheAt14() {
+        try {
+            logger.info("🔄 [14:00] Начинается запланированное обновление кэша лимитов");
+            var stats = limitsService.refreshLimitsCache();
+            
+            logger.info("=== РЕЗУЛЬТАТЫ ОБНОВЛЕНИЯ КЭША ЛИМИТОВ [14:00] ===");
+            logger.info("✅ Успешно обновлено: {}", stats.get("successCount"));
+            logger.info("❌ Ошибок: {}", stats.get("errorCount"));
+            logger.info("⏭️ Пропущено: {}", stats.get("skippedCount"));
+            logger.info("⏱️ Время выполнения: {} мс", stats.get("durationMs"));
+            logger.info("================================================");
+            
+        } catch (Exception e) {
+            logger.error("❌ Ошибка при обновлении кэша лимитов [14:00]: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Обновление кэша лимитов в 19:00 по рабочим дням
+     * 
+     * Выполняется каждый рабочий день (понедельник-пятница) в 19:00 по московскому времени
+     * для обновления кэша лимитов всех инструментов (акций и фьючерсов).
+     * Это позволяет поддерживать актуальные данные лимитов перед вечерней торговой сессией.
+     */
+    @Scheduled(cron = "0 0 19 * * MON-FRI", zone = "Europe/Moscow")
+    public void refreshLimitsCacheAt19() {
+        try {
+            logger.info("🔄 [19:00] Начинается запланированное обновление кэша лимитов");
+            var stats = limitsService.refreshLimitsCache();
+            
+            logger.info("=== РЕЗУЛЬТАТЫ ОБНОВЛЕНИЯ КЭША ЛИМИТОВ [19:00] ===");
+            logger.info("✅ Успешно обновлено: {}", stats.get("successCount"));
+            logger.info("❌ Ошибок: {}", stats.get("errorCount"));
+            logger.info("⏭️ Пропущено: {}", stats.get("skippedCount"));
+            logger.info("⏱️ Время выполнения: {} мс", stats.get("durationMs"));
+            logger.info("================================================");
+            
+        } catch (Exception e) {
+            logger.error("❌ Ошибка при обновлении кэша лимитов [19:00]: {}", e.getMessage(), e);
         }
     }
 }
