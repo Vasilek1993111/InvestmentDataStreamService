@@ -18,6 +18,8 @@ import com.example.investmentdatastreamservice.service.streaming.GrpcConnectionM
 import com.example.investmentdatastreamservice.service.streaming.StreamingMetrics;
 import com.example.investmentdatastreamservice.service.streaming.StreamingService;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -63,6 +65,9 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
         t.setDaemon(true);
         return t;
     });
+    
+    // Задержка для переподключения при RESOURCE_EXHAUSTED (60 секунд)
+    private static final long RESOURCE_EXHAUSTED_RECONNECT_DELAY_SECONDS = 60;
     
     public LimitMonitoringStreamingService(
             GrpcConnectionManager connectionManager,
