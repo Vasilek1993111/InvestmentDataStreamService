@@ -28,7 +28,7 @@ public class GrpcConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(GrpcConfig.class);
 
-    @Value("${T_INVEST_TEST_TOKEN}")
+    @Value("${T_INVEST_TEST_TOKEN:${T_INVEST_PROD_TOKEN:your-token-here}}")
     private String token;
 
     /**

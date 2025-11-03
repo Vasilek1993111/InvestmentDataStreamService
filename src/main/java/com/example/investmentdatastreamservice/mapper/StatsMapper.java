@@ -17,17 +17,31 @@ public interface StatsMapper {
     /**
      * Конвертирует ServiceStats в ObjectStatsDto
      */
-    @Mapping(target = "general", source = "stats")
-    @Mapping(target = "lastPrice", source = "stats")
-    @Mapping(target = "trades", source = "stats")
-    ObjectStatsDto toObjectStatsDto(ServiceStats stats);
+    default ObjectStatsDto toObjectStatsDto(ServiceStats stats) {
+        if (stats == null) {
+            return null;
+        }
+        return ObjectStatsDto.builder()
+                .general(toGeneralStatsDto(stats))
+                .lastPrice(toLastPriceStatsDto(stats))
+                .trades(toTradeStatsDto(stats))
+                .build();
+    }
     
     /**
      * Конвертирует ServiceStats в GeneralStatsDto
      */
+    @Mapping(target = "running", source = "running")
+    @Mapping(target = "connected", source = "connected")
+    @Mapping(target = "totalReceived", source = "totalReceivedAll")
     @Mapping(target = "totalInserted", source = "totalProcessedAll")
     @Mapping(target = "totalProcessed", source = "totalProcessedAll")
     @Mapping(target = "totalErrors", source = "totalErrorsAll")
+    @Mapping(target = "overallProcessingRate", source = "overallProcessingRate")
+    @Mapping(target = "overallErrorRate", source = "overallErrorRate")
+    @Mapping(target = "tradeInsertUtilization", source = "tradeInsertUtilization")
+    @Mapping(target = "availableTradeInserts", source = "availableTradeInserts")
+    @Mapping(target = "maxConcurrentTradeInserts", source = "maxConcurrentTradeInserts")
     GeneralStatsDto toGeneralStatsDto(ServiceStats stats);
     
     /**

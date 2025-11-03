@@ -10,6 +10,7 @@ import com.example.investmentdatastreamservice.repository.FutureRepository;
 import com.example.investmentdatastreamservice.repository.TradeRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
@@ -24,13 +25,14 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Сервис для мониторинга приближения к лимитам инструментов
+ * Сервис для мониторинга приближения к лимитам инструментов и их достижения
  * 
- * Отслеживает цены LAST_PRICE и отправляет уведомления в Telegram
- * при приближении к лимитам (1%) или их достижении.
+ * Отслеживает цены LAST_PRICE и отправляет уведомления в Telegram:
+ * - при приближении к лимитам (порог настраивается через limit.monitor.approach.threshold, по умолчанию 1%)
+ * - при достижении лимитов (верхнего или нижнего)
  */
 @Service
-public class LimitMonitorService {
+public class LimitMonitorService implements InitializingBean {
     
     private static final Logger logger = LoggerFactory.getLogger(LimitMonitorService.class);
     
@@ -50,8 +52,9 @@ public class LimitMonitorService {
     @Value("${TELEGRAM_LIMIT_CHANNEL_ID}")
     private String telegramChannelId;
     
-    // Порог приближения к лимиту (1%)
-    private static final BigDecimal APPROACH_THRESHOLD = new BigDecimal("0.01");
+    // Порог приближения к лимиту (настраивается через конфигурацию limit.monitor.approach.threshold)
+    @Value("${limit.monitor.approach.threshold:0.01}")
+    private BigDecimal approachThreshold;
     
     public LimitMonitorService(
             LimitsService limitsService,
@@ -66,15 +69,28 @@ public class LimitMonitorService {
         this.futureRepository = futureRepository;
         this.tradeRepository = tradeRepository;
         this.cacheManager = cacheManager;
-        
-        // Логируем информацию о настройке Telegram канала
+    }
+    
+    /**
+     * Инициализация после создания бина и инжекции всех зависимостей
+     */
+    @Override
+    public void afterPropertiesSet() {
+        // Логируем информацию о настройке Telegram канала и пороге приближения
+        BigDecimal thresholdPercent = approachThreshold.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP);
+        logger.info("================================================================");
         logger.info("🔧 Инициализация LimitMonitorService");
+        logger.info("📊 ПОРОГ ПРИБЛИЖЕНИЯ К ЛИМИТУ: {}% (десятичное значение: {})", 
+                   thresholdPercent, approachThreshold);
+        logger.info("   Уведомления будут отправляться при приближении к лимиту на {}% и менее", thresholdPercent);
+        logger.info("   Настройка: limit.monitor.approach.threshold={}", approachThreshold);
         if (telegramChannelId != null && !telegramChannelId.trim().isEmpty()) {
             logger.info("✅ Telegram канал для уведомлений о лимитах настроен: {}", telegramChannelId);
         } else {
             logger.warn("⚠️ Telegram канал для уведомлений о лимитах НЕ настроен");
             logger.warn("💡 Для настройки добавьте переменную TELEGRAM_LIMIT_CHANNEL_ID в .env файл");
         }
+        logger.info("================================================================");
     }
     
     /**
@@ -91,7 +107,8 @@ public class LimitMonitorService {
             // Получаем лимиты для инструмента
             LimitsDto limits = limitsService.getLimitsFromCache(figi);
             if (limits == null || limits.getLimitUp() == null || limits.getLimitDown() == null) {
-                logger.debug("Лимиты не найдены для инструмента: {}", figi);
+                logger.debug("Лимиты не найдены для инструмента: {} (порог приближения: {}%)", 
+                           figi, approachThreshold.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP));
                 return;
             }
             
@@ -108,12 +125,14 @@ public class LimitMonitorService {
                              limits.getLimitDown(), "DOWN", eventTime, limits);
             
         } catch (Exception e) {
-            logger.error("Ошибка при обработке LAST_PRICE для мониторинга лимитов: {}", figi, e);
+            BigDecimal thresholdPercent = approachThreshold.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP);
+            logger.error("Ошибка при обработке LAST_PRICE для мониторинга лимитов: {} (порог приближения: {}%)", 
+                        figi, thresholdPercent, e);
         }
     }
     
     /**
-     * Проверка приближения к лимиту
+     * Проверка приближения к лимиту и достижения лимита
      */
     private void checkLimitApproach(String figi, String ticker, String instrumentName,
                                    BigDecimal currentPrice, BigDecimal limitPrice, 
@@ -125,39 +144,104 @@ public class LimitMonitorService {
         
         // Вычисляем расстояние до лимита в процентах
         BigDecimal distanceToLimit = calculateDistanceToLimit(currentPrice, limitPrice);
+        BigDecimal distanceToLimitPercent = distanceToLimit.multiply(new BigDecimal("100"));
+        BigDecimal approachThresholdPercent = approachThreshold.multiply(new BigDecimal("100"));
         
         // Проверяем, достигнут ли лимит
         boolean isLimitReached = isLimitReached(currentPrice, limitPrice, limitType);
         
-        // Проверяем, приближается ли к лимиту (1%)
-        boolean isApproachingLimit = distanceToLimit.compareTo(APPROACH_THRESHOLD) <= 0 && !isLimitReached;
+        // Проверяем, приближается ли к лимиту (порог настраивается через конфигурацию)
+        boolean isApproachingLimit = distanceToLimit.compareTo(approachThreshold) <= 0 && !isLimitReached;
         
-        if (isLimitReached || isApproachingLimit) {
-            // Получаем цены закрытия
-            BigDecimal closePriceOs = getLastClosePrice(figi, "OS");
-            BigDecimal closePriceEvening = getLastClosePrice(figi, "EVENING");
-            
-            // Создаем DTO для уведомления
-            LimitAlertDto alert = LimitAlertDto.builder()
-                .figi(figi)
-                .ticker(ticker)
-                .instrumentName(instrumentName)
-                .eventTime(eventTime)
-                .currentPrice(currentPrice)
-                .limitPrice(limitPrice)
-                .limitType(limitType)
-                .limitDown(limits.getLimitDown())
-                .limitUp(limits.getLimitUp())
-                .closePriceOs(closePriceOs)
-                .closePriceEvening(closePriceEvening)
-                .distanceToLimit(distanceToLimit.multiply(new BigDecimal("100"))) // В процентах
-                .isLimitReached(isLimitReached)
-                .isApproachingLimit(isApproachingLimit)
-                .build();
-            
-            // Отправляем уведомление
-            sendLimitAlert(alert);
+        // Логируем информацию о проверке лимита
+        logger.debug("Проверка лимита для {} ({}): текущая цена={}, лимит={}, расстояние={}%, порог приближения={}%", 
+                    ticker, limitType, currentPrice, limitPrice, 
+                    distanceToLimitPercent.setScale(2, RoundingMode.HALF_UP),
+                    approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+        
+        // Приоритет: сначала проверяем достижение лимита, затем приближение
+        if (isLimitReached) {
+            // Инструмент достиг лимита - отправляем уведомление о достижении
+            logger.info("🚨 Лимит {} достигнут для {} ({}): цена={}, лимит={}, порог приближения={}%", 
+                       limitType, ticker, figi, currentPrice, limitPrice,
+                       approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+            sendLimitReachedNotification(figi, ticker, instrumentName, currentPrice, 
+                                       limitPrice, limitType, eventTime, limits, distanceToLimit);
+        } else if (isApproachingLimit) {
+            // Инструмент приближается к лимиту - отправляем уведомление о приближении
+            logger.info("⚠️ Приближение к лимиту {} для {} ({}): расстояние={}%, порог={}%", 
+                       limitType, ticker, figi, 
+                       distanceToLimitPercent.setScale(2, RoundingMode.HALF_UP),
+                       approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+            sendApproachingLimitNotification(figi, ticker, instrumentName, currentPrice, 
+                                           limitPrice, limitType, eventTime, limits, distanceToLimit);
         }
+    }
+    
+    /**
+     * Отправка уведомления о достижении лимита
+     */
+    private void sendLimitReachedNotification(String figi, String ticker, String instrumentName,
+                                            BigDecimal currentPrice, BigDecimal limitPrice,
+                                            String limitType, LocalDateTime eventTime, 
+                                            LimitsDto limits, BigDecimal distanceToLimit) {
+        // Получаем цены закрытия
+        BigDecimal closePriceOs = getLastClosePrice(figi, "OS");
+        BigDecimal closePriceEvening = getLastClosePrice(figi, "EVENING");
+        
+        // Создаем DTO для уведомления о достижении лимита
+        LimitAlertDto alert = LimitAlertDto.builder()
+            .figi(figi)
+            .ticker(ticker)
+            .instrumentName(instrumentName)
+            .eventTime(eventTime)
+            .currentPrice(currentPrice)
+            .limitPrice(limitPrice)
+            .limitType(limitType)
+            .limitDown(limits.getLimitDown())
+            .limitUp(limits.getLimitUp())
+            .closePriceOs(closePriceOs)
+            .closePriceEvening(closePriceEvening)
+            .distanceToLimit(distanceToLimit.multiply(new BigDecimal("100"))) // В процентах
+            .isLimitReached(true)
+            .isApproachingLimit(false)
+            .build();
+        
+        // Отправляем уведомление
+        sendLimitAlert(alert);
+    }
+    
+    /**
+     * Отправка уведомления о приближении к лимиту
+     */
+    private void sendApproachingLimitNotification(String figi, String ticker, String instrumentName,
+                                                 BigDecimal currentPrice, BigDecimal limitPrice,
+                                                 String limitType, LocalDateTime eventTime, 
+                                                 LimitsDto limits, BigDecimal distanceToLimit) {
+        // Получаем цены закрытия
+        BigDecimal closePriceOs = getLastClosePrice(figi, "OS");
+        BigDecimal closePriceEvening = getLastClosePrice(figi, "EVENING");
+        
+        // Создаем DTO для уведомления о приближении к лимиту
+        LimitAlertDto alert = LimitAlertDto.builder()
+            .figi(figi)
+            .ticker(ticker)
+            .instrumentName(instrumentName)
+            .eventTime(eventTime)
+            .currentPrice(currentPrice)
+            .limitPrice(limitPrice)
+            .limitType(limitType)
+            .limitDown(limits.getLimitDown())
+            .limitUp(limits.getLimitUp())
+            .closePriceOs(closePriceOs)
+            .closePriceEvening(closePriceEvening)
+            .distanceToLimit(distanceToLimit.multiply(new BigDecimal("100"))) // В процентах
+            .isLimitReached(false)
+            .isApproachingLimit(true)
+            .build();
+        
+        // Отправляем уведомление
+        sendLimitAlert(alert);
     }
     
     /**
@@ -228,11 +312,14 @@ public class LimitMonitorService {
     }
     
     /**
-     * Отправка уведомления о лимите
+     * Отправка уведомления о лимите (достижении или приближении)
+     * 
+     * Использует существующие методы для получения данных и форматирования сообщения.
+     * Для достижения лимита и приближения к лимиту используются разные ключи кэша.
      */
     private void sendLimitAlert(LimitAlertDto alert) {
         try {
-            // Проверяем, не отправляли ли уже уведомление за сегодня
+            // Формируем ключ кэша: для достижения лимита и приближения используются разные ключи
             String alertKey = alert.getFigi() + "_" + alert.getLimitType() + "_" + 
                             (alert.isLimitReached() ? "REACHED" : "APPROACHING");
             LocalDate today = LocalDate.now();
@@ -244,26 +331,34 @@ public class LimitMonitorService {
                 if (wrapper != null && wrapper.get() != null) {
                     LocalDate cachedDate = (LocalDate) wrapper.get();
                     if (cachedDate.equals(today)) {
-                        logger.debug("Уведомление для {} уже отправлено сегодня", alertKey);
+                        String alertType = alert.isLimitReached() ? "достижении лимита" : "приближении к лимиту";
+                        logger.debug("Уведомление о {} для {} уже отправлено сегодня", alertType, alertKey);
                         return;
                     }
                 }
             }
             
-            // Формируем сообщение
+            // Формируем сообщение используя существующий метод
             String message = formatLimitAlertMessage(alert);
             
             // Отправляем в Telegram
             if (telegramChannelId != null && !telegramChannelId.trim().isEmpty()) {
-                logger.info("📤 Отправка уведомления о лимите в Telegram канал: {}", telegramChannelId);
-                logger.info("📊 Данные уведомления - Тикер: {}, FIGI: {}, Тип лимита: {}, Текущая цена: {}, Лимит: {}", 
-                           alert.getTicker(), alert.getFigi(), alert.getLimitType(), 
-                           alert.getCurrentPrice(), alert.getLimitPrice());
+                String alertType = alert.isLimitReached() ? "достижении лимита" : "приближении к лимиту";
+                BigDecimal approachThresholdPercent = approachThreshold.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP);
+                logger.info("📤 Отправка уведомления о {} в Telegram канал: {}", alertType, telegramChannelId);
+                logger.info("📊 Данные уведомления:");
+                logger.info("   - Тикер: {}", alert.getTicker());
+                logger.info("   - FIGI: {}", alert.getFigi());
+                logger.info("   - Тип лимита: {}", alert.getLimitType());
+                logger.info("   - Текущая цена: {} ₽", alert.getCurrentPrice());
+                logger.info("   - Цена лимита: {} ₽", alert.getLimitPrice());
+                logger.info("   - ПОРОГ ПРИБЛИЖЕНИЯ: {}% (настроен в limit.monitor.approach.threshold)", approachThresholdPercent);
                 
                 telegramBotService.sendText(telegramChannelId, message);
                 
-                logger.info("✅ Уведомление о лимите успешно отправлено в Telegram канал: {} для тикера: {}", 
-                           telegramChannelId, alert.getTicker());
+                String statusEmoji = alert.isLimitReached() ? "🚨" : "⚠️";
+                logger.info("{} Уведомление о {} успешно отправлено в Telegram канал: {} для тикера: {}", 
+                           statusEmoji, alertType, telegramChannelId, alert.getTicker());
             } else {
                 logger.warn("❌ Telegram channel ID не настроен (значение: '{}'), уведомление не отправлено", 
                            telegramChannelId != null ? telegramChannelId : "null");

@@ -21,15 +21,45 @@ TELEGRAM_BOT_USERNAME=your_bot_username
 
 ### 2. Запуск сервиса
 
+#### Запуск с Docker (рекомендуется)
+
+```bash
+# Подготовка переменных окружения
+cp env.prod.example .env
+# Отредактируйте .env и заполните необходимые значения
+
+# Windows
+docker-start.bat
+
+# Linux/Mac
+chmod +x docker-start.sh
+./docker-start.sh
+```
+
+Или вручную:
+
+```bash
+# Создать Docker сеть
+docker network create investment-network
+
+# Подключить существующую PostgreSQL БД к сети
+docker network connect investment-network investment-postgres
+
+# Сборка и запуск
+docker-compose up -d
+```
+
+#### Запуск без Docker
+
 ```bash
 # Сборка
 mvn clean package -DskipTests
 
 # Запуск (тестовое окружение)
-java -jar target/investment-data-stream-service-1.0.0.jar
+java -jar target/investment-data-stream-service-*.jar
 
 # Запуск (продакшн)
-java -jar target/investment-data-stream-service-1.0.0.jar --spring.profiles.active=prod
+java -jar target/investment-data-stream-service-*.jar --spring.profiles.active=prod
 ```
 
 ### 3. Проверка работы
@@ -47,11 +77,17 @@ curl -X POST http://localhost:8084/api/streaming-service/start
 
 ## 📚 Документация
 
+### 🚀 Быстрый старт
+- **[Быстрый старт Docker](QUICK_START_DOCKER.md)** - ⚡ Запуск за 5 минут
+- **[Подробная настройка Docker](DOCKER_SETUP.md)** - 🐳 Полное руководство
+
+### 📖 Основная документация
 - **[Полная документация](docs/README.md)** - Подробное руководство
 - **[API Reference](docs/API_REFERENCE.md)** - Описание REST API
 - **[Telegram Bot](docs/TELEGRAM_BOT.md)** - Руководство по боту
 - **[Архитектура](docs/ARCHITECTURE_DIAGRAM.md)** - Диаграммы системы
 - **[Мониторинг](docs/MONITORING_GUIDE.md)** - Настройка мониторинга
+- **[Docker Guide](docs/DOCKER.md)** - Детальное руководство по Docker
 
 ## 🎯 Основные возможности
 
@@ -114,10 +150,12 @@ GET /api/candles/subscription/stats
 
 ### Требования
 
-- Java 17+
-- Maven 3.6+
-- PostgreSQL 12+
+- Java 21+
+- Maven 3.9+
+- PostgreSQL 15+
+- Docker & Docker Compose (для контейнеризации)
 - Telegram Bot Token
+- Tinkoff Invest API Token
 
 ### Сборка
 

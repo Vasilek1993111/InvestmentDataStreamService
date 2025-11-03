@@ -1,0 +1,78 @@
+# ===========================================
+# .dockerignore для Investment Data Stream Service
+# ===========================================
+
+# Игнорируем все что не нужно в Docker образе
+
+# Build artifacts
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.log
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+*.swp
+*.swo
+*~
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Documentation (не нужна в образе)
+docs/
+*.md
+README.md
+
+# Logs
+logs/
+*.log
+
+# Environment files
+.env
+.env.*
+!.env.example
+env.*.example
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Scripts (не нужны в образе)
+scripts/
+*.sh
+*.bat
+
+# Postman collections
+postman/
+
+# Maven wrapper (не нужен в образе, используем maven из образа)
+.mvn/
+mvnw
+mvnw.cmd
+
+# Test files
+src/test/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Docker files themselves
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+

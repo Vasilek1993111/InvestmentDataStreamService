@@ -1,0 +1,67 @@
+# ===========================================
+# Docker Compose для Investment Data Stream Service
+# ===========================================
+# Примечание: БД должна быть запущена отдельно в Docker
+# Настройте переменные окружения для подключения к существующей БД
+
+version: '3.8'
+
+services:
+  investment-data-stream-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: investment-data-stream-service
+    image: investment-data-stream-service:latest
+    
+    # Загрузка переменных из .env.docker файла (специально для Docker)
+    # Если .env.docker не существует, создайте его на основе .env.prod
+    # с изменением localhost на host.docker.internal в URL БД
+    env_file:
+      - .env.docker
+    
+    # Порт приложения
+    ports:
+      - "8084:8084"
+    
+    # Переменные окружения
+    # Все переменные загружаются из .env.docker через env_file выше
+    # Дополнительные переменные можно добавить здесь
+    environment:
+      # JVM options (если не заданы в .env.docker)
+      - JAVA_OPTS=${JAVA_OPTS:--Xms512m -Xmx1024m -XX:+UseG1GC -XX:MaxGCPauseMillis=200}
+      
+      # Timezone
+      - TZ=Europe/Moscow
+    
+    # Volumes для персистентности логов
+    volumes:
+      - ./logs:/app/logs
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Зависимости (если БД в другой docker-compose, можно использовать network)
+    # networks:
+    #   - investment-network
+    
+    # Логирование
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Раскомментируйте если нужно создать общую сеть с БД
+# networks:
+#   investment-network:
+#     external: true
+#     name: investment-network
