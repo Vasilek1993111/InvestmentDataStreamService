@@ -10,6 +10,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 import io.grpc.stub.StreamObserver;
@@ -20,10 +22,13 @@ import ru.tinkoff.piapi.contract.v1.MarketDataStreamServiceGrpc;
 /**
  * Менеджер подключений к gRPC API
  * 
- * Централизованное управление подключениями к T-Invest API с автоматическим
- * переподключением, мониторингом состояния и оптимизацией производительности.
+ * Каждый streaming сервис получает свой собственный экземпляр GrpcConnectionManager
+ * для независимой работы. Scope=prototype гарантирует создание нового bean для каждого сервиса.
+ * 
+ * ВАЖНО: Каждый стрим должен иметь свое независимое подключение к T-Invest API!
  */
 @Component
+@Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
 public class GrpcConnectionManager {
     
     private static final Logger log = LoggerFactory.getLogger(GrpcConnectionManager.class);
@@ -46,15 +51,16 @@ public class GrpcConnectionManager {
     public GrpcConnectionManager(MarketDataStreamServiceGrpc.MarketDataStreamServiceStub streamStub) {
         this.streamStub = streamStub;
         this.reconnectScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "grpc-reconnect-scheduler");
+            Thread t = new Thread(r, "grpc-reconnect-scheduler-" + System.identityHashCode(this));
             t.setDaemon(true);
             return t;
         });
         this.connectionExecutor = Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "grpc-connection-worker");
+            Thread t = new Thread(r, "grpc-connection-worker-" + System.identityHashCode(this));
             t.setDaemon(true);
             return t;
         });
+        log.info("Created new GrpcConnectionManager instance: {}", System.identityHashCode(this));
     }
     
     /**
@@ -64,6 +70,7 @@ public class GrpcConnectionManager {
      */
     public void setResponseObserver(StreamObserver<MarketDataResponse> responseObserver) {
         this.responseObserver.set(responseObserver);
+        log.debug("Response observer set for connection manager: {}", System.identityHashCode(this));
     }
     
     /**
@@ -220,6 +227,9 @@ public class GrpcConnectionManager {
         log.info("GrpcConnectionManager shutdown completed");
     }
 }
+
+
+
 
 
 

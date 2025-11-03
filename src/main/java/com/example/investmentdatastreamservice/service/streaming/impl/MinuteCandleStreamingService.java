@@ -9,57 +9,54 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.example.investmentdatastreamservice.repository.FutureRepository;
-import com.example.investmentdatastreamservice.repository.IndicativeRepository;
 import com.example.investmentdatastreamservice.repository.ShareRepository;
 import com.example.investmentdatastreamservice.service.streaming.GrpcConnectionManager;
 import com.example.investmentdatastreamservice.service.streaming.StreamingMetrics;
 import com.example.investmentdatastreamservice.service.streaming.StreamingService;
-import com.example.investmentdatastreamservice.service.streaming.processor.TradeProcessor;
+import com.example.investmentdatastreamservice.service.streaming.processor.CandleProcessor;
 
 import io.grpc.stub.StreamObserver;
+import ru.tinkoff.piapi.contract.v1.Candle;
+import ru.tinkoff.piapi.contract.v1.CandleInstrument;
 import ru.tinkoff.piapi.contract.v1.MarketDataRequest;
 import ru.tinkoff.piapi.contract.v1.MarketDataResponse;
-import ru.tinkoff.piapi.contract.v1.SubscribeTradesRequest;
-import ru.tinkoff.piapi.contract.v1.SubscribeTradesResponse;
+import ru.tinkoff.piapi.contract.v1.SubscribeCandlesRequest;
+import ru.tinkoff.piapi.contract.v1.SubscribeCandlesResponse;
 import ru.tinkoff.piapi.contract.v1.SubscriptionAction;
-import ru.tinkoff.piapi.contract.v1.Trade;
-import ru.tinkoff.piapi.contract.v1.TradeInstrument;
+import ru.tinkoff.piapi.contract.v1.SubscriptionInterval;
 
 /**
- * Сервис для потоковой обработки обезличенных сделок (Trade)
+ * Сервис для потоковой обработки минутных свечей
  * 
- * Высокопроизводительный сервис для получения и обработки обезличенных сделок
+ * Высокопроизводительный сервис для получения и обработки минутных свечей
  * от T-Invest API с автоматическим переподключением и детальным мониторингом.
  */
 @Service
-public class TradeStreamingService implements StreamingService<Trade> {
+public class MinuteCandleStreamingService implements StreamingService<Candle> {
     
-    private static final Logger log = LoggerFactory.getLogger(TradeStreamingService.class);
+    private static final Logger log = LoggerFactory.getLogger(MinuteCandleStreamingService.class);
     
     private final GrpcConnectionManager connectionManager;
-    private final TradeProcessor processor;
+    private final CandleProcessor processor;
     private final ShareRepository shareRepository;
     private final FutureRepository futureRepository;
-    private final IndicativeRepository indicativeRepository;
     
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
     private final StreamingMetrics metrics;
     
-    public TradeStreamingService(
+    public MinuteCandleStreamingService(
             GrpcConnectionManager connectionManager,
-            TradeProcessor processor,
+            CandleProcessor processor,
             ShareRepository shareRepository,
-            FutureRepository futureRepository,
-            IndicativeRepository indicativeRepository) {
+            FutureRepository futureRepository) {
         
         this.connectionManager = connectionManager;
         this.processor = processor;
         this.shareRepository = shareRepository;
         this.futureRepository = futureRepository;
-        this.indicativeRepository = indicativeRepository;
-        this.metrics = new StreamingMetrics("TradeStreamingService");
+        this.metrics = new StreamingMetrics("MinuteCandleStreamingService");
         
-        log.info("TradeStreamingService initialized with GrpcConnectionManager: {}", 
+        log.info("MinuteCandleStreamingService initialized with GrpcConnectionManager: {}", 
             System.identityHashCode(connectionManager));
         
         // Настраиваем обработчик ответов
@@ -70,11 +67,11 @@ public class TradeStreamingService implements StreamingService<Trade> {
     public CompletableFuture<Void> start() {
         return CompletableFuture.runAsync(() -> {
             if (isRunning.get()) {
-                log.warn("Trade streaming service is already running");
+                log.warn("MinuteCandle streaming service is already running");
                 return;
             }
             
-            log.info("Starting Trade streaming service...");
+            log.info("Starting MinuteCandle streaming service...");
             isRunning.set(true);
             metrics.setRunning(true);
             
@@ -83,24 +80,27 @@ public class TradeStreamingService implements StreamingService<Trade> {
                 List<String> instruments = getAllInstruments();
                 
                 if (instruments.isEmpty()) {
-                    log.warn("No instruments found for Trade subscription");
+                    log.warn("No instruments found for MinuteCandle subscription");
                     isRunning.set(false);
                     metrics.setRunning(false);
                     return;
                 }
                 
-                log.info("Subscribing to Trades for {} instruments", instruments.size());
+                log.info("Subscribing to MinuteCandles for {} instruments", instruments.size());
                 
                 // Создаем запрос на подписку
-                SubscribeTradesRequest request = SubscribeTradesRequest.newBuilder()
+                SubscribeCandlesRequest request = SubscribeCandlesRequest.newBuilder()
                     .setSubscriptionAction(SubscriptionAction.SUBSCRIPTION_ACTION_SUBSCRIBE)
                     .addAllInstruments(instruments.stream()
-                        .map(figi -> TradeInstrument.newBuilder().setInstrumentId(figi).build())
+                        .map(figi -> CandleInstrument.newBuilder()
+                            .setInstrumentId(figi)
+                            .setInterval(SubscriptionInterval.SUBSCRIPTION_INTERVAL_ONE_MINUTE)
+                            .build())
                         .toList())
                     .build();
                 
                 MarketDataRequest marketDataRequest = MarketDataRequest.newBuilder()
-                    .setSubscribeTradesRequest(request)
+                    .setSubscribeCandlesRequest(request)
                     .build();
                 
                 // Подключаемся и отправляем запрос
@@ -108,17 +108,17 @@ public class TradeStreamingService implements StreamingService<Trade> {
                     .thenCompose(v -> connectionManager.sendRequest(marketDataRequest))
                     .whenComplete((result, throwable) -> {
                         if (throwable != null) {
-                            log.error("Failed to start Trade streaming", throwable);
+                            log.error("Failed to start MinuteCandle streaming", throwable);
                             isRunning.set(false);
                             metrics.setRunning(false);
                             scheduleReconnect();
                         } else {
-                            log.info("Trade streaming service started successfully");
+                            log.info("MinuteCandle streaming service started successfully");
                         }
                     });
                 
             } catch (Exception e) {
-                log.error("Error starting Trade streaming service", e);
+                log.error("Error starting MinuteCandle streaming service", e);
                 isRunning.set(false);
                 metrics.setRunning(false);
                 scheduleReconnect();
@@ -130,11 +130,11 @@ public class TradeStreamingService implements StreamingService<Trade> {
     public CompletableFuture<Void> stop() {
         return CompletableFuture.runAsync(() -> {
             if (!isRunning.get()) {
-                log.warn("Trade streaming service is not running");
+                log.warn("MinuteCandle streaming service is not running");
                 return;
             }
             
-            log.info("Stopping Trade streaming service...");
+            log.info("Stopping MinuteCandle streaming service...");
             isRunning.set(false);
             metrics.setRunning(false);
             
@@ -142,15 +142,18 @@ public class TradeStreamingService implements StreamingService<Trade> {
                 // Отправляем запрос на отписку
                 List<String> instruments = getAllInstruments();
                 if (!instruments.isEmpty()) {
-                    SubscribeTradesRequest unsubscribeRequest = SubscribeTradesRequest.newBuilder()
+                    SubscribeCandlesRequest unsubscribeRequest = SubscribeCandlesRequest.newBuilder()
                         .setSubscriptionAction(SubscriptionAction.SUBSCRIPTION_ACTION_UNSUBSCRIBE)
                         .addAllInstruments(instruments.stream()
-                            .map(figi -> TradeInstrument.newBuilder().setInstrumentId(figi).build())
+                            .map(figi -> CandleInstrument.newBuilder()
+                                .setInstrumentId(figi)
+                                .setInterval(SubscriptionInterval.SUBSCRIPTION_INTERVAL_ONE_MINUTE)
+                                .build())
                             .toList())
                         .build();
                     
                     MarketDataRequest marketDataRequest = MarketDataRequest.newBuilder()
-                        .setSubscribeTradesRequest(unsubscribeRequest)
+                        .setSubscribeCandlesRequest(unsubscribeRequest)
                         .build();
                     
                     connectionManager.sendRequest(marketDataRequest).join();
@@ -159,10 +162,10 @@ public class TradeStreamingService implements StreamingService<Trade> {
                 // Отключаемся
                 connectionManager.disconnect().join();
                 
-                log.info("Trade streaming service stopped successfully");
+                log.info("MinuteCandle streaming service stopped successfully");
                 
             } catch (Exception e) {
-                log.error("Error stopping Trade streaming service", e);
+                log.error("Error stopping MinuteCandle streaming service", e);
             }
         });
     }
@@ -170,15 +173,15 @@ public class TradeStreamingService implements StreamingService<Trade> {
     @Override
     public CompletableFuture<Void> reconnect() {
         return CompletableFuture.runAsync(() -> {
-            log.info("Force reconnecting Trade streaming service...");
+            log.info("Force reconnecting MinuteCandle streaming service...");
             
             connectionManager.forceReconnect()
                 .thenCompose(v -> start())
                 .whenComplete((result, throwable) -> {
                     if (throwable != null) {
-                        log.error("Failed to reconnect Trade streaming service", throwable);
+                        log.error("Failed to reconnect MinuteCandle streaming service", throwable);
                     } else {
-                        log.info("Trade streaming service reconnected successfully");
+                        log.info("MinuteCandle streaming service reconnected successfully");
                     }
                 });
         });
@@ -201,12 +204,12 @@ public class TradeStreamingService implements StreamingService<Trade> {
     
     @Override
     public String getServiceName() {
-        return "TradeStreamingService";
+        return "MinuteCandleStreamingService";
     }
     
     @Override
-    public Class<Trade> getDataType() {
-        return Trade.class;
+    public Class<Candle> getDataType() {
+        return Candle.class;
     }
     
     /**
@@ -216,23 +219,23 @@ public class TradeStreamingService implements StreamingService<Trade> {
         StreamObserver<MarketDataResponse> responseObserver = new StreamObserver<>() {
             @Override
             public void onNext(MarketDataResponse response) {
-                if (response.hasSubscribeTradesResponse()) {
-                    handleSubscriptionResponse(response.getSubscribeTradesResponse());
-                } else if (response.hasTrade()) {
-                    handleTradeData(response.getTrade());
+                if (response.hasSubscribeCandlesResponse()) {
+                    handleSubscriptionResponse(response.getSubscribeCandlesResponse());
+                } else if (response.hasCandle()) {
+                    handleCandleData(response.getCandle());
                 }
             }
             
             @Override
             public void onError(Throwable t) {
-                log.error("Trade stream error", t);
+                log.error("MinuteCandle stream error", t);
                 metrics.setConnected(false);
                 scheduleReconnect();
             }
             
             @Override
             public void onCompleted() {
-                log.info("Trade stream completed");
+                log.info("MinuteCandle stream completed");
                 metrics.setConnected(false);
                 if (isRunning.get()) {
                     scheduleReconnect();
@@ -246,21 +249,21 @@ public class TradeStreamingService implements StreamingService<Trade> {
     /**
      * Обработка ответа на подписку
      */
-    private void handleSubscriptionResponse(SubscribeTradesResponse response) {
+    private void handleSubscriptionResponse(SubscribeCandlesResponse response) {
         metrics.setConnected(true);
-        log.info("=== TRADES SUBSCRIPTION RESPONSE ===");
-        log.info("Total subscriptions: {}", response.getTradeSubscriptionsList().size());
-        response.getTradeSubscriptionsList().forEach(subscription -> 
+        log.info("=== MINUTE CANDLES SUBSCRIPTION RESPONSE ===");
+        log.info("Total subscriptions: {}", response.getCandlesSubscriptionsList().size());
+        response.getCandlesSubscriptionsList().forEach(subscription -> 
             log.info("  FIGI {} -> {}", subscription.getFigi(), subscription.getSubscriptionStatus())
         );
-        log.info("===================================");
+        log.info("==========================================");
     }
     
     /**
-     * Обработка данных Trade
+     * Обработка данных Candle
      */
-    private void handleTradeData(Trade trade) {
-        processor.process(trade)
+    private void handleCandleData(Candle candle) {
+        processor.process(candle)
             .whenComplete((result, throwable) -> {
                 if (throwable != null) {
                     processor.handleError(throwable);
@@ -284,12 +287,7 @@ public class TradeStreamingService implements StreamingService<Trade> {
             .filter(figi -> figi != null && !figi.trim().isEmpty())
             .toList());
         
-        // Добавляем индикативные инструменты
-        instruments.addAll(indicativeRepository.findAllDistinctFigi().stream()
-            .filter(figi -> figi != null && !figi.trim().isEmpty())
-            .toList());
-        
-        log.info("Found {} instruments for Trade subscription", instruments.size());
+        log.info("Found {} instruments for MinuteCandle subscription", instruments.size());
         return instruments;
     }
     
@@ -300,17 +298,11 @@ public class TradeStreamingService implements StreamingService<Trade> {
         if (isRunning.get()) {
             connectionManager.scheduleReconnect(() -> {
                 if (isRunning.get()) {
-                    log.info("Attempting to reconnect Trade streaming service...");
+                    log.info("Attempting to reconnect MinuteCandle streaming service...");
                     start();
                 }
             });
         }
     }
 }
-
-
-
-
-
-
 

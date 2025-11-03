@@ -1,20 +1,25 @@
-    
 package com.example.investmentdatastreamservice.entity;
+
+import jakarta.persistence.Embeddable;
+
 import java.io.Serializable;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Objects;
 
-public class MinuteCandleKey implements Serializable {
+@Embeddable
+public class LastPriceKey implements Serializable {
     private String figi;
-    private Instant time;
+    private LocalDateTime time;
 
-    public MinuteCandleKey() {}
+    // Конструкторы
+    public LastPriceKey() {}
 
-    public MinuteCandleKey(String figi, Instant time) {
+    public LastPriceKey(String figi, LocalDateTime time) {
         this.figi = figi;
         this.time = time;
     }
 
+    // Геттеры и сеттеры
     public String getFigi() {
         return figi;
     }
@@ -23,19 +28,20 @@ public class MinuteCandleKey implements Serializable {
         this.figi = figi;
     }
 
-    public Instant getTime() {
+    public LocalDateTime getTime() {
         return time;
     }
 
-    public void setTime(Instant time) {
+    public void setTime(LocalDateTime time) {
         this.time = time;
     }
 
+    // Реализация equals и hashCode (обязательно для композитных ключей)
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        MinuteCandleKey that = (MinuteCandleKey) o;
+        LastPriceKey that = (LastPriceKey) o;
         return Objects.equals(figi, that.figi) && Objects.equals(time, that.time);
     }
 

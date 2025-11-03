@@ -12,7 +12,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import com.example.investmentdatastreamservice.entity.TradeEntity;
+import com.example.investmentdatastreamservice.entity.LastPriceEntity;
 import com.example.investmentdatastreamservice.service.streaming.StreamingMetrics;
 
 import ru.tinkoff.piapi.contract.v1.LastPrice;
@@ -59,17 +59,17 @@ public class LastPriceProcessor implements DataProcessor<LastPrice> {
             try {
                 metrics.incrementReceived();
                 
-                // Создаем TradeEntity для сохранения
-                TradeEntity entity = createTradeEntity(lastPrice);
+                // Создаем LastPriceEntity для сохранения
+                LastPriceEntity entity = createLastPriceEntity(lastPrice);
                 
                 // Асинхронное сохранение
-                insertTradeDataAsync(entity);
+                insertLastPriceDataAsync(entity);
                 
                 // Обновляем счетчики по типам инструментов
                 updateInstrumentCounters(lastPrice.getFigi());
                 
-                // Логирование каждые 100 записей
-                if (metrics.getTotalReceived() % 100 == 0) {
+                // Логирование каждые 1000 записей
+                if (metrics.getTotalReceived() % 1000 == 0) {
                     log.info("LastPrice processing: {}", metrics);
                 }
                 
@@ -87,9 +87,9 @@ public class LastPriceProcessor implements DataProcessor<LastPrice> {
     }
     
     /**
-     * Создание TradeEntity из LastPrice
+     * Создание LastPriceEntity из LastPrice
      */
-    private TradeEntity createTradeEntity(LastPrice lastPrice) {
+    private LastPriceEntity createLastPriceEntity(LastPrice lastPrice) {
         java.time.Instant eventInstant = java.time.Instant.ofEpochSecond(
             lastPrice.getTime().getSeconds(), 
             lastPrice.getTime().getNanos()
@@ -103,22 +103,19 @@ public class LastPriceProcessor implements DataProcessor<LastPrice> {
         java.math.BigDecimal priceValue = java.math.BigDecimal.valueOf(lastPrice.getPrice().getUnits())
             .add(java.math.BigDecimal.valueOf(lastPrice.getPrice().getNano()).movePointLeft(9));
         
-        return new TradeEntity(
+        return new LastPriceEntity(
             lastPrice.getFigi(),
             eventTime,
-            "LAST_PRICE",
             priceValue,
-            1L, // Количество = 1 для LastPrice
             "RUB",
-            "MOEX",
-            "LAST_PRICE"
+            "MOEX"
         );
     }
     
     /**
      * Асинхронная вставка данных в базу
      */
-    private void insertTradeDataAsync(TradeEntity entity) {
+    private void insertLastPriceDataAsync(LastPriceEntity entity) {
         if (!insertSemaphore.tryAcquire()) {
             metrics.incrementDropped();
             log.warn("Too many concurrent inserts, dropping LastPrice for {}", entity.getId().getFigi());
@@ -128,13 +125,13 @@ public class LastPriceProcessor implements DataProcessor<LastPrice> {
         insertExecutor.submit(() -> {
             try {
                 final String sql = """
-                    INSERT INTO invest.trades 
-                    (figi, time, direction, price, quantity, currency, exchange, trade_source, trade_direction) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) 
-                    ON CONFLICT (figi, time, direction) DO UPDATE SET 
-                    price = EXCLUDED.price, quantity = EXCLUDED.quantity, 
-                    currency = EXCLUDED.currency, exchange = EXCLUDED.exchange, 
-                    trade_source = EXCLUDED.trade_source, trade_direction = EXCLUDED.trade_direction
+                    INSERT INTO invest.last_prices 
+                    (figi, time, price, currency, exchange) 
+                    VALUES (?, ?, ?, ?, ?) 
+                    ON CONFLICT (figi, time) DO UPDATE SET 
+                    price = EXCLUDED.price, 
+                    currency = EXCLUDED.currency, 
+                    exchange = EXCLUDED.exchange
                     """;
                 
                 java.sql.Timestamp ts = java.sql.Timestamp.valueOf(entity.getId().getTime());
@@ -142,20 +139,25 @@ public class LastPriceProcessor implements DataProcessor<LastPrice> {
                 streamJdbcTemplate.update(sql,
                     entity.getId().getFigi(),
                     ts,
-                    entity.getId().getDirection(),
                     entity.getPrice(),
-                    entity.getQuantity(),
                     entity.getCurrency(),
-                    entity.getExchange(),
-                    entity.getTradeSource(),
-                    entity.getTradeDirection()
+                    entity.getExchange()
                 );
                 
                 metrics.incrementProcessed();
                 
+                // Детальное логирование каждой цены
+                log.info("💰 LAST_PRICE → DB: FIGI={}, Time={}, Price={}, Currency={}, Exchange={}", 
+                    entity.getId().getFigi(), 
+                    ts, 
+                    entity.getPrice(), 
+                    entity.getCurrency(), 
+                    entity.getExchange());
+                
             } catch (Exception e) {
                 metrics.incrementErrors();
-                log.error("Error inserting LastPrice for {}", entity.getId().getFigi(), e);
+                log.error("❌ Error inserting LastPrice for FIGI={}, Time={}: {}", 
+                    entity.getId().getFigi(), entity.getId().getTime(), e.getMessage(), e);
             } finally {
                 insertSemaphore.release();
             }

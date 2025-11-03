@@ -59,6 +59,9 @@ public class LastPriceStreamingService implements StreamingService<LastPrice> {
         this.indicativeRepository = indicativeRepository;
         this.metrics = new StreamingMetrics("LastPriceStreamingService");
         
+        log.info("LastPriceStreamingService initialized with GrpcConnectionManager: {}", 
+            System.identityHashCode(connectionManager));
+        
         // Настраиваем обработчик ответов
         setupResponseObserver();
     }
@@ -304,6 +307,9 @@ public class LastPriceStreamingService implements StreamingService<LastPrice> {
         }
     }
 }
+
+
+
 
 
 

@@ -6,7 +6,6 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
-
 @Entity
 @Table(name = "minute_candles", schema = "invest")
 @IdClass(MinuteCandleKey.class)
@@ -63,14 +62,15 @@ public class MinuteCandleEntity {
     @Column(name = "average_price", precision = 18, scale = 2)
     private BigDecimal averagePrice;
     
-    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
+    @Column(name = "created_at", nullable = false)
     private Instant createdAt;
     
-    @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
+    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     public MinuteCandleEntity() {
-        // created_at и updated_at устанавливаются автоматически БД
+        this.createdAt = ZonedDateTime.now(ZoneId.of("Europe/Moscow")).toInstant();
+        this.updatedAt = ZonedDateTime.now(ZoneId.of("Europe/Moscow")).toInstant();
     }
 
     public MinuteCandleEntity(String figi, long volume, BigDecimal high, BigDecimal low, 
@@ -125,7 +125,10 @@ public class MinuteCandleEntity {
         return moscowTime.toInstant();
     }
 
-    // @PreUpdate убран - updated_at обновляется автоматически триггером БД
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = ZonedDateTime.now(ZoneId.of("Europe/Moscow")).toInstant();
+    }
 
     // Getters and Setters
     public String getFigi() { return figi; }

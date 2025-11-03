@@ -1,0 +1,872 @@
+{
+	"info": {
+		"_postman_id": "investment-data-stream-service-v2",
+		"name": "Investment Data Stream Service API v2 - Complete",
+		"description": "Полная коллекция API для Investment Data Stream Service v2 с новой архитектурой независимых стримов",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "investment-data-stream-service-v2"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8084",
+			"type": "string"
+		},
+		{
+			"key": "share_figi",
+			"value": "BBG004S68758",
+			"type": "string"
+		},
+		{
+			"key": "future_figi",
+			"value": "FUTSBER03260",
+			"type": "string"
+		},
+		{
+			"key": "indicative_figi",
+			"value": "TCS00A0JR514",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "🏠 Health & Status",
+			"item": [
+				{
+					"name": "Application Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/actuator/health",
+							"host": ["{{base_url}}"],
+							"path": ["actuator", "health"]
+						},
+						"description": "Проверка состояния приложения"
+					},
+					"response": []
+				},
+				{
+					"name": "Application Info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/actuator/info",
+							"host": ["{{base_url}}"],
+							"path": ["actuator", "info"]
+						},
+						"description": "Информация о приложении"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🎯 Trade Stream",
+			"description": "Управление потоком обезличенных сделок. Данные записываются в таблицу invest.trades",
+			"item": [
+				{
+					"name": "Start Trade Stream",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/trades/start",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "trades", "start"]
+						},
+						"description": "Запустить стрим обезличенных сделок"
+					},
+					"response": []
+				},
+				{
+					"name": "Stop Trade Stream",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/trades/stop",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "trades", "stop"]
+						},
+						"description": "Остановить стрим обезличенных сделок"
+					},
+					"response": []
+				},
+				{
+					"name": "Reconnect Trade Stream",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/trades/reconnect",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "trades", "reconnect"]
+						},
+						"description": "Переподключить стрим обезличенных сделок"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Trade Stream Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/trades/status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "trades", "status"]
+						},
+						"description": "Получить статус стрима обезличенных сделок"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Trade Stream Metrics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/trades/metrics",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "trades", "metrics"]
+						},
+						"description": "Получить метрики стрима обезличенных сделок"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "📈 Minute Candles Stream",
+			"description": "Управление потоком минутных свечей. Данные записываются в таблицу invest.minute_candles",
+			"item": [
+				{
+					"name": "Start Candles Stream",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/minute-candles/start",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "minute-candles", "start"]
+						},
+						"description": "Запустить стрим минутных свечей"
+					},
+					"response": []
+				},
+				{
+					"name": "Stop Candles Stream",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/minute-candles/stop",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "minute-candles", "stop"]
+						},
+						"description": "Остановить стрим минутных свечей"
+					},
+					"response": []
+				},
+				{
+					"name": "Reconnect Candles Stream",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/minute-candles/reconnect",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "minute-candles", "reconnect"]
+						},
+						"description": "Переподключить стрим минутных свечей"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Candles Stream Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/minute-candles/status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "minute-candles", "status"]
+						},
+						"description": "Получить статус стрима минутных свечей"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Candles Stream Metrics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/minute-candles/metrics",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "minute-candles", "metrics"]
+						},
+						"description": "Получить метрики стрима минутных свечей"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "💰 Last Price Stream",
+			"description": "Управление потоком цен последних сделок. Данные записываются в таблицу invest.last_prices",
+			"item": [
+				{
+					"name": "Start LastPrice Stream",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/last-price/start",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "last-price", "start"]
+						},
+						"description": "Запустить стрим цен последних сделок"
+					},
+					"response": []
+				},
+				{
+					"name": "Stop LastPrice Stream",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/last-price/stop",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "last-price", "stop"]
+						},
+						"description": "Остановить стрим цен последних сделок"
+					},
+					"response": []
+				},
+				{
+					"name": "Reconnect LastPrice Stream",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/last-price/reconnect",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "last-price", "reconnect"]
+						},
+						"description": "Переподключить стрим цен последних сделок"
+					},
+					"response": []
+				},
+				{
+					"name": "Get LastPrice Stream Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/last-price/status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "last-price", "status"]
+						},
+						"description": "Получить статус стрима цен последних сделок"
+					},
+					"response": []
+				},
+				{
+					"name": "Get LastPrice Stream Metrics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/last-price/metrics",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "last-price", "metrics"]
+						},
+						"description": "Получить метрики стрима цен последних сделок"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🚨 Limits Monitoring Stream",
+			"description": "Управление потоком мониторинга лимитов. Отправляет уведомления в Telegram",
+			"item": [
+				{
+					"name": "Start Limits Stream",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/limits/start",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "limits", "start"]
+						},
+						"description": "Запустить стрим мониторинга лимитов"
+					},
+					"response": []
+				},
+				{
+					"name": "Stop Limits Stream",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/limits/stop",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "limits", "stop"]
+						},
+						"description": "Остановить стрим мониторинга лимитов"
+					},
+					"response": []
+				},
+				{
+					"name": "Reconnect Limits Stream",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/limits/reconnect",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "limits", "reconnect"]
+						},
+						"description": "Переподключить стрим мониторинга лимитов"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Limits Stream Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/limits/status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "limits", "status"]
+						},
+						"description": "Получить статус стрима мониторинга лимитов"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Limits Stream Metrics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/stream/limits/metrics",
+							"host": ["{{base_url}}"],
+							"path": ["api", "stream", "limits", "metrics"]
+						},
+						"description": "Получить метрики стрима мониторинга лимитов"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "📊 Instruments API",
+			"item": [
+				{
+					"name": "Shares",
+					"item": [
+						{
+							"name": "Get All Shares",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/instruments/shares",
+									"host": ["{{base_url}}"],
+									"path": ["api", "instruments", "shares"]
+								},
+								"description": "Получить все акции из кэша"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Share by FIGI",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/instruments/shares/{{share_figi}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "instruments", "shares", "{{share_figi}}"]
+								},
+								"description": "Получить акцию по FIGI"
+							},
+							"response": []
+						},
+						{
+							"name": "Search Shares",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/instruments/shares/search?query=SBER",
+									"host": ["{{base_url}}"],
+									"path": ["api", "instruments", "shares", "search"],
+									"query": [
+										{
+											"key": "query",
+											"value": "SBER"
+										}
+									]
+								},
+								"description": "Поиск акций по названию или тикеру"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Futures",
+					"item": [
+						{
+							"name": "Get All Futures",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/instruments/futures",
+									"host": ["{{base_url}}"],
+									"path": ["api", "instruments", "futures"]
+								},
+								"description": "Получить все фьючерсы из кэша"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Future by FIGI",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/instruments/futures/{{future_figi}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "instruments", "futures", "{{future_figi}}"]
+								},
+								"description": "Получить фьючерс по FIGI"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Indicatives",
+					"item": [
+						{
+							"name": "Get All Indicatives",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/instruments/indicatives",
+									"host": ["{{base_url}}"],
+									"path": ["api", "instruments", "indicatives"]
+								},
+								"description": "Получить все индикативные инструменты"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Indicative by FIGI",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/instruments/indicatives/{{indicative_figi}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "instruments", "indicatives", "{{indicative_figi}}"]
+								},
+								"description": "Получить индикативный инструмент по FIGI"
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "🔄 Cache Management",
+			"item": [
+				{
+					"name": "Warm Up All Caches",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cache/warmup",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cache", "warmup"]
+						},
+						"description": "Прогрев всех кэшей (акции, фьючерсы, индикативные)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Cache Statistics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cache/stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cache", "stats"]
+						},
+						"description": "Получить статистику по всем кэшам"
+					},
+					"response": []
+				},
+				{
+					"name": "Clear All Caches",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cache/clear",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cache", "clear"]
+						},
+						"description": "Очистить все кэши"
+					},
+					"response": []
+				},
+				{
+					"name": "Clear Shares Cache",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/cache/clear/shares",
+							"host": ["{{base_url}}"],
+							"path": ["api", "cache", "clear", "shares"]
+						},
+						"description": "Очистить кэш акций"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "📉 Candles API",
+			"item": [
+				{
+					"name": "Get Candles by FIGI",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/candles/{{share_figi}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "candles", "{{share_figi}}"]
+						},
+						"description": "Получить свечи по FIGI инструмента"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Candles by FIGI and Time Range",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/candles/{{share_figi}}/range?from=2025-11-03T09:00:00&to=2025-11-03T18:00:00",
+							"host": ["{{base_url}}"],
+							"path": ["api", "candles", "{{share_figi}}", "range"],
+							"query": [
+								{
+									"key": "from",
+									"value": "2025-11-03T09:00:00"
+								},
+								{
+									"key": "to",
+									"value": "2025-11-03T18:00:00"
+								}
+							]
+						},
+						"description": "Получить свечи за указанный период времени"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "📌 Limit Monitoring API",
+			"item": [
+				{
+					"name": "Get All Limits",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/limits",
+							"host": ["{{base_url}}"],
+							"path": ["api", "limits"]
+						},
+						"description": "Получить все лимиты"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Limit by FIGI",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/limits/{{share_figi}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "limits", "{{share_figi}}"]
+						},
+						"description": "Получить лимит по FIGI"
+					},
+					"response": []
+				},
+				{
+					"name": "Create or Update Limit",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"figi\": \"BBG004S68758\",\n  \"upperLimit\": 300.0,\n  \"lowerLimit\": 250.0\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/limits",
+							"host": ["{{base_url}}"],
+							"path": ["api", "limits"]
+						},
+						"description": "Создать или обновить лимит для инструмента"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Limit",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/limits/{{share_figi}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "limits", "{{share_figi}}"]
+						},
+						"description": "Удалить лимит по FIGI"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🚀 Quick Start Scenarios",
+			"description": "Готовые сценарии для быстрого запуска",
+			"item": [
+				{
+					"name": "1. Complete Startup",
+					"item": [
+						{
+							"name": "1.1 Health Check",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/actuator/health",
+									"host": ["{{base_url}}"],
+									"path": ["actuator", "health"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "1.2 Warm Up Caches",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/cache/warmup",
+									"host": ["{{base_url}}"],
+									"path": ["api", "cache", "warmup"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "1.3 Start Trade Stream",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/stream/trades/start",
+									"host": ["{{base_url}}"],
+									"path": ["api", "stream", "trades", "start"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "1.4 Start Candles Stream",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/stream/minute-candles/start",
+									"host": ["{{base_url}}"],
+									"path": ["api", "stream", "minute-candles", "start"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "1.5 Start LastPrice Stream",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/stream/last-price/start",
+									"host": ["{{base_url}}"],
+									"path": ["api", "stream", "last-price", "start"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "1.6 Start Limits Stream",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/stream/limits/start",
+									"host": ["{{base_url}}"],
+									"path": ["api", "stream", "limits", "start"]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "2. Monitor All Streams",
+					"item": [
+						{
+							"name": "2.1 Trade Stream Metrics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/stream/trades/metrics",
+									"host": ["{{base_url}}"],
+									"path": ["api", "stream", "trades", "metrics"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "2.2 Candles Stream Metrics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/stream/minute-candles/metrics",
+									"host": ["{{base_url}}"],
+									"path": ["api", "stream", "minute-candles", "metrics"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "2.3 LastPrice Stream Metrics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/stream/last-price/metrics",
+									"host": ["{{base_url}}"],
+									"path": ["api", "stream", "last-price", "metrics"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "2.4 Limits Stream Metrics",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/stream/limits/metrics",
+									"host": ["{{base_url}}"],
+									"path": ["api", "stream", "limits", "metrics"]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "3. Stop All Streams",
+					"item": [
+						{
+							"name": "3.1 Stop Trade Stream",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/stream/trades/stop",
+									"host": ["{{base_url}}"],
+									"path": ["api", "stream", "trades", "stop"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "3.2 Stop Candles Stream",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/stream/minute-candles/stop",
+									"host": ["{{base_url}}"],
+									"path": ["api", "stream", "minute-candles", "stop"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "3.3 Stop LastPrice Stream",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/stream/last-price/stop",
+									"host": ["{{base_url}}"],
+									"path": ["api", "stream", "last-price", "stop"]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "3.4 Stop Limits Stream",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/stream/limits/stop",
+									"host": ["{{base_url}}"],
+									"path": ["api", "stream", "limits", "stop"]
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		}
+	]
+}
+

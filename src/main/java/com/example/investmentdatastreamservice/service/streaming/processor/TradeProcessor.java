@@ -161,9 +161,18 @@ public class TradeProcessor implements DataProcessor<Trade> {
                 
                 metrics.incrementProcessed();
                 
+                // Детальное логирование каждой сделки
+                log.info("🔄 TRADE → DB: FIGI={}, Time={}, Direction={}, Price={}, Qty={}", 
+                    entity.getId().getFigi(), 
+                    ts, 
+                    entity.getId().getDirection(),
+                    entity.getPrice(), 
+                    entity.getQuantity());
+                
             } catch (Exception e) {
                 metrics.incrementErrors();
-                log.error("Error inserting Trade for {}", entity.getId().getFigi(), e);
+                log.error("❌ Error inserting Trade for FIGI={}, Time={}: {}", 
+                    entity.getId().getFigi(), entity.getId().getTime(), e.getMessage(), e);
             } finally {
                 insertSemaphore.release();
             }
@@ -289,6 +298,9 @@ public class TradeProcessor implements DataProcessor<Trade> {
         }
     }
 }
+
+
+
 
 
 
