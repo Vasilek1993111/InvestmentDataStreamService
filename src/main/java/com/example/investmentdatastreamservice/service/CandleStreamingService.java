@@ -321,7 +321,7 @@ public class CandleStreamingService {
                         + "(figi, time, open, high, low, close, volume, is_complete, "
                         + "price_change, price_change_percent, candle_type, body_size, "
                         + "upper_shadow, lower_shadow, high_low_range, average_price) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                         + "ON CONFLICT (figi, time) DO UPDATE SET "
                         + "open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low, "
                         + "close = EXCLUDED.close, volume = EXCLUDED.volume, "
