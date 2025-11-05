@@ -84,35 +84,52 @@ begin
     v_start_time := (to_char(v_prev_date, 'YYYY-MM-DD') || ' 21:00:00+00')::timestamp with time zone;
     v_end_time := (to_char(p_date, 'YYYY-MM-DD') || ' 21:00:00+00')::timestamp with time zone;
     
-    -- Проверяем, существует ли партиция
+    -- Проверяем, существует ли партиция (используем pg_inherits для более надежной проверки)
     if exists (
         select 1
         from pg_class c
         join pg_namespace n on n.oid = c.relnamespace
+        join pg_inherits i on i.inhrelid = c.oid
+        join pg_class p on p.oid = i.inhparent
         where n.nspname = 'invest_candles'
           and c.relname = 'minute_candles_' || to_char(p_date, 'YYYY_MM_DD')
+          and p.relname = 'minute_candles'
     ) then
         raise notice 'Партиция % уже существует', v_partition_name;
         return v_partition_name || ' уже существует';
     end if;
     
-    -- Создаем партицию
-    execute format(
-        'create table invest_candles.minute_candles_%s partition of invest_candles.minute_candles ' ||
-        'for values from (%L) to (%L)',
-        to_char(p_date, 'YYYY_MM_DD'),
-        v_start_time,
-        v_end_time
-    );
-    
-    -- Устанавливаем владельца
-    execute format(
-        'alter table invest_candles.minute_candles_%s owner to postgres',
-        to_char(p_date, 'YYYY_MM_DD')
-    );
-    
-    raise notice 'Создана партиция % для даты %', v_partition_name, p_date;
-    return v_partition_name || ' создана успешно';
+    -- Создаем партицию (с обработкой возможных ошибок)
+    begin
+        execute format(
+            'create table invest_candles.minute_candles_%s partition of invest_candles.minute_candles ' ||
+            'for values from (%L) to (%L)',
+            to_char(p_date, 'YYYY_MM_DD'),
+            v_start_time,
+            v_end_time
+        );
+        
+        -- Устанавливаем владельца
+        execute format(
+            'alter table invest_candles.minute_candles_%s owner to postgres',
+            to_char(p_date, 'YYYY_MM_DD')
+        );
+        
+        raise notice 'Создана партиция % для даты %', v_partition_name, p_date;
+        return v_partition_name || ' создана успешно';
+    exception
+        when duplicate_table then
+            raise notice 'Партиция % уже существует (duplicate_table)', v_partition_name;
+            return v_partition_name || ' уже существует';
+        when others then
+            -- Если ошибка перекрытия партиций (42P17) или другая ошибка
+            if SQLSTATE = '42P17' then
+                raise notice 'Партиция % уже существует или перекрывается (overlap)', v_partition_name;
+                return v_partition_name || ' уже существует';
+            else
+                raise;
+            end if;
+    end;
 end;
 $$;
 

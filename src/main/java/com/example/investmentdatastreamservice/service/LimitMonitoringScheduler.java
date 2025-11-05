@@ -18,10 +18,13 @@ public class LimitMonitoringScheduler {
     
     private final LimitMonitorService limitMonitorService;
     private final LimitsService limitsService;
+    private final CacheWarmupService cacheWarmupService;
     
-    public LimitMonitoringScheduler(LimitMonitorService limitMonitorService, LimitsService limitsService) {
+    public LimitMonitoringScheduler(LimitMonitorService limitMonitorService, LimitsService limitsService,
+                                   CacheWarmupService cacheWarmupService) {
         this.limitMonitorService = limitMonitorService;
         this.limitsService = limitsService;
+        this.cacheWarmupService = cacheWarmupService;
     }
     
     /**
@@ -115,6 +118,35 @@ public class LimitMonitoringScheduler {
             
         } catch (Exception e) {
             logger.error("❌ Ошибка при обновлении кэша лимитов [19:00]: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Обновление кэша исторических цен в 2:00 ежедневно
+     * 
+     * Выполняется каждый день в 2:00 по московскому времени
+     * для обновления кэша исторических экстремумов после обновления материализованного представления.
+     * 
+     * Исторические цены загружаются все сразу из БД и обновляются только в 2:00, как и остальные кэши.
+     * TTL кэша: 24 часа, поэтому обновление ночью гарантирует актуальность данных на весь день.
+     */
+    @Scheduled(cron = "0 0 2 * * *", zone = "Europe/Moscow")
+    public void refreshHistoricalPricesCacheAt2() {
+        try {
+            logger.info("🔄 [02:00] Начинается запланированное обновление кэша исторических цен");
+            var stats = cacheWarmupService.refreshHistoricalPricesCache();
+            
+            if ((Boolean) stats.get("success")) {
+                logger.info("=== РЕЗУЛЬТАТЫ ОБНОВЛЕНИЯ КЭША ИСТОРИЧЕСКИХ ЦЕН [02:00] ===");
+                logger.info("✅ Успешно обновлено: {}", stats.get("successCount"));
+                logger.info("📊 Всего записей: {}", stats.get("totalCount"));
+                logger.info("⏱️ Время выполнения: {} мс", stats.get("durationMs"));
+                logger.info("================================================");
+            } else {
+                logger.error("❌ Ошибка при обновлении кэша исторических цен [02:00]: {}", stats.get("error"));
+            }
+        } catch (Exception e) {
+            logger.error("❌ Ошибка при обновлении кэша исторических цен [02:00]: {}", e.getMessage(), e);
         }
     }
 }

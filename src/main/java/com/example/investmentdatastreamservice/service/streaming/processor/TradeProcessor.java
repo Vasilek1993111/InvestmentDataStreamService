@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +18,9 @@ import com.example.investmentdatastreamservice.service.streaming.StreamingMetric
 
 import ru.tinkoff.piapi.contract.v1.Trade;
 import ru.tinkoff.piapi.contract.v1.TradeDirection;
+
+import java.sql.Date;
+import java.time.LocalDate;
 
 /**
  * Процессор для обработки данных Trade (обезличенных сделок)
@@ -147,27 +151,82 @@ public class TradeProcessor implements DataProcessor<Trade> {
                 
                 java.sql.Timestamp ts = java.sql.Timestamp.valueOf(entity.getId().getTime());
                 
-                streamJdbcTemplate.update(sql,
-                    entity.getId().getFigi(),
-                    ts,
-                    entity.getId().getDirection(),
-                    entity.getPrice(),
-                    entity.getQuantity(),
-                    entity.getCurrency(),
-                    entity.getExchange(),
-                    entity.getTradeSource(),
-                    entity.getTradeDirection()
-                );
-                
-                metrics.incrementProcessed();
-                
-                // Детальное логирование каждой сделки
-                log.info("🔄 TRADE → DB: FIGI={}, Time={}, Direction={}, Price={}, Qty={}", 
-                    entity.getId().getFigi(), 
-                    ts, 
-                    entity.getId().getDirection(),
-                    entity.getPrice(), 
-                    entity.getQuantity());
+                try {
+                    streamJdbcTemplate.update(sql,
+                        entity.getId().getFigi(),
+                        ts,
+                        entity.getId().getDirection(),
+                        entity.getPrice(),
+                        entity.getQuantity(),
+                        entity.getCurrency(),
+                        entity.getExchange(),
+                        entity.getTradeSource(),
+                        entity.getTradeDirection()
+                    );
+                    
+                    metrics.incrementProcessed();
+                    
+                    // Детальное логирование каждой сделки
+                    log.info("🔄 TRADE → DB: FIGI={}, Time={}, Direction={}, Price={}, Qty={}", 
+                        entity.getId().getFigi(), 
+                        ts, 
+                        entity.getId().getDirection(),
+                        entity.getPrice(), 
+                        entity.getQuantity());
+                        
+                } catch (DataIntegrityViolationException e) {
+                    // Проверяем, является ли ошибка связанной с отсутствием партиции
+                    String errorMessage = e.getMessage();
+                    Throwable cause = e.getCause();
+                    // Проверяем как основное сообщение, так и причину (PSQLException)
+                    boolean isPartitionError = (errorMessage != null && errorMessage.contains("no partition")) ||
+                                              (cause != null && cause.getMessage() != null && cause.getMessage().contains("no partition"));
+                    
+                    if (isPartitionError) {
+                        // Извлекаем дату из timestamp и создаем партицию
+                        LocalDate partitionDate = entity.getId().getTime().toLocalDate();
+                        log.warn("⚠️ Partition not found for date {}, creating partition...", partitionDate);
+                        
+                        try {
+                            // Создаем партицию через функцию БД (функция уже проверяет существование)
+                            String createPartitionSql = "SELECT invest_utils.create_trades_partition(?)";
+                            String result = streamJdbcTemplate.queryForObject(createPartitionSql, String.class, Date.valueOf(partitionDate));
+                            log.info("✅ Partition creation result for date {}: {}", partitionDate, result);
+                            
+                            // Повторяем попытку вставки после создания партиции
+                            streamJdbcTemplate.update(sql,
+                                entity.getId().getFigi(),
+                                ts,
+                                entity.getId().getDirection(),
+                                entity.getPrice(),
+                                entity.getQuantity(),
+                                entity.getCurrency(),
+                                entity.getExchange(),
+                                entity.getTradeSource(),
+                                entity.getTradeDirection()
+                            );
+                            
+                            metrics.incrementProcessed();
+                            log.info("🔄 TRADE → DB (retry): FIGI={}, Time={}, Direction={}, Price={}, Qty={}", 
+                                entity.getId().getFigi(), 
+                                ts, 
+                                entity.getId().getDirection(),
+                                entity.getPrice(), 
+                                entity.getQuantity());
+                        } catch (Exception retryException) {
+                            metrics.incrementErrors();
+                            log.error("❌ Error creating partition or retrying insert for FIGI={}, Time={}: {}", 
+                                entity.getId().getFigi(), entity.getId().getTime(), retryException.getMessage(), retryException);
+                            throw retryException;
+                        }
+                    } else {
+                        // Другая ошибка целостности данных
+                        metrics.incrementErrors();
+                        log.error("❌ Data integrity error inserting Trade for FIGI={}, Time={}: {}", 
+                            entity.getId().getFigi(), entity.getId().getTime(), e.getMessage(), e);
+                        throw e;
+                    }
+                }
                 
             } catch (Exception e) {
                 metrics.incrementErrors();

@@ -20,6 +20,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
  * <li><strong>indicativesCache</strong> - кэш индикативных инструментов</li>
  * <li><strong>limitsCache</strong> - кэш лимитов инструментов</li>
  * <li><strong>notificationsCache</strong> - кэш уведомлений о лимитах</li>
+ * <li><strong>historicalPricesCache</strong> - кэш исторических экстремумов цен</li>
  * </ul>
  * 
  * <p>
@@ -27,8 +28,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
  * </p>
  * <ul>
  * <li>Максимальный размер кэша: 10,000 записей (для всех кэшей)</li>
- * <li>Время жизни записи после записи: 24 часа</li>
- * <li>Время жизни записи после последнего доступа: 12 часов</li>
+ * <li>Время жизни записи после записи: 24 часа (строго, независимо от доступа)</li>
  * </ul>
  * 
  * @author InvestmentDataStreamService
@@ -45,23 +45,27 @@ public class CacheConfig {
      * <p>
      * Настройки кэша:
      * </p>
-     * <ul>
-     * <li>Максимальное количество записей: 10,000 (для всех кэшей)</li>
-     * <li>Время жизни после записи: 24 часа</li>
-     * <li>Время жизни после доступа: 12 часов</li>
-     * <li>Запись статистики использования кэша</li>
-     * </ul>
+ * <ul>
+ * <li>Максимальное количество записей: 10,000 (для всех кэшей)</li>
+ * <li>Время жизни после записи: 24 часа (строго, независимо от доступа)</li>
+ * <li>Запись статистики использования кэша</li>
+ * </ul>
      * 
      * @return настроенный CacheManager
      */
     @Bean
     public CacheManager cacheManager() {
         CaffeineCacheManager cacheManager =
-                new CaffeineCacheManager("sharesCache", "futuresCache", "indicativesCache", "limitsCache", "notificationsCache");
+                new CaffeineCacheManager("sharesCache",
+                 "futuresCache", 
+                 "indicativesCache",
+                  "limitsCache",
+                  "notificationsCache",
+                  "historicalPricesCache");
 
         cacheManager.setCaffeine(
                 Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(24, TimeUnit.HOURS)
-                        .expireAfterAccess(12, TimeUnit.HOURS).recordStats());
+                        .recordStats());
 
         return cacheManager;
     }

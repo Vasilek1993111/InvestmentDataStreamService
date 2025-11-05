@@ -2,6 +2,7 @@ package com.example.investmentdatastreamservice.service;
 
 import com.example.investmentdatastreamservice.dto.LimitAlertDto;
 import com.example.investmentdatastreamservice.dto.LimitsDto;
+import com.example.investmentdatastreamservice.dto.HistoricalPriceDto;
 import com.example.investmentdatastreamservice.entity.ShareEntity;
 import com.example.investmentdatastreamservice.entity.FutureEntity;
 import com.example.investmentdatastreamservice.entity.TradeEntity;
@@ -20,6 +21,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -42,19 +44,30 @@ public class LimitMonitorService implements InitializingBean {
     private final FutureRepository futureRepository;
     private final TradeRepository tradeRepository;
     private final CacheManager cacheManager;
+    private final HistoricalPricesService historicalPricesService;
     
     // Счетчики для статистики
     private final AtomicLong totalAlertsProcessed = new AtomicLong(0);
     private final AtomicLong approachingLimitAlerts = new AtomicLong(0);
     private final AtomicLong limitReachedAlerts = new AtomicLong(0);
     private final AtomicLong notificationsSent = new AtomicLong(0);
+    private final AtomicLong historicalExtremeAlerts = new AtomicLong(0);
+    private final AtomicLong historicalExtremeReachedAlerts = new AtomicLong(0);
     
     @Value("${TELEGRAM_LIMIT_CHANNEL_ID}")
     private String telegramChannelId;
     
-    // Порог приближения к лимиту (настраивается через конфигурацию limit.monitor.approach.threshold)
-    @Value("${limit.monitor.approach.threshold:0.01}")
+    // Порог приближения к лимиту (настраивается через конфигурацию limit.monitor.approach.threshold в процентах)
+    @Value("${limit.monitor.approach.threshold:1.0}")
+    private BigDecimal approachThresholdPercent;
+    
+    // Порог приближения к историческим экстремумам (настраивается через конфигурацию limit.monitor.historical.approach.threshold в процентах)
+    @Value("${limit.monitor.historical.approach.threshold:1.0}")
+    private BigDecimal historicalApproachThresholdPercent;
+    
+    // Конвертированные значения в десятичном формате (для расчетов)
     private BigDecimal approachThreshold;
+    private BigDecimal historicalApproachThreshold;
     
     public LimitMonitorService(
             LimitsService limitsService,
@@ -62,13 +75,15 @@ public class LimitMonitorService implements InitializingBean {
             ShareRepository shareRepository,
             FutureRepository futureRepository,
             TradeRepository tradeRepository,
-            CacheManager cacheManager) {
+            CacheManager cacheManager,
+            HistoricalPricesService historicalPricesService) {
         this.limitsService = limitsService;
         this.telegramBotService = telegramBotService;
         this.shareRepository = shareRepository;
         this.futureRepository = futureRepository;
         this.tradeRepository = tradeRepository;
         this.cacheManager = cacheManager;
+        this.historicalPricesService = historicalPricesService;
     }
     
     /**
@@ -76,14 +91,25 @@ public class LimitMonitorService implements InitializingBean {
      */
     @Override
     public void afterPropertiesSet() {
+        // Конвертируем проценты в десятичный формат для расчетов
+        approachThreshold = approachThresholdPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
+        historicalApproachThreshold = historicalApproachThresholdPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
+        
         // Логируем информацию о настройке Telegram канала и пороге приближения
-        BigDecimal thresholdPercent = approachThreshold.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP);
         logger.info("================================================================");
         logger.info("🔧 Инициализация LimitMonitorService");
         logger.info("📊 ПОРОГ ПРИБЛИЖЕНИЯ К ЛИМИТУ: {}% (десятичное значение: {})", 
-                   thresholdPercent, approachThreshold);
-        logger.info("   Уведомления будут отправляться при приближении к лимиту на {}% и менее", thresholdPercent);
-        logger.info("   Настройка: limit.monitor.approach.threshold={}", approachThreshold);
+                   approachThresholdPercent.setScale(2, RoundingMode.HALF_UP), approachThreshold);
+        logger.info("   Уведомления будут отправляться при приближении к лимиту на {}% и менее", 
+                   approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+        logger.info("   Настройка: limit.monitor.approach.threshold={}%", approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+        
+        logger.info("📊 ПОРОГ ПРИБЛИЖЕНИЯ К ИСТОРИЧЕСКИМ ЭКСТРЕМУМАМ: {}% (десятичное значение: {})", 
+                   historicalApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP), historicalApproachThreshold);
+        logger.info("   Уведомления будут отправляться при приближении к историческому экстремуму на {}% и менее", 
+                   historicalApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+        logger.info("   Настройка: limit.monitor.historical.approach.threshold={}%", 
+                   historicalApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
         if (telegramChannelId != null && !telegramChannelId.trim().isEmpty()) {
             logger.info("✅ Telegram канал для уведомлений о лимитах настроен: {}", telegramChannelId);
         } else {
@@ -108,7 +134,7 @@ public class LimitMonitorService implements InitializingBean {
             LimitsDto limits = limitsService.getLimitsFromCache(figi);
             if (limits == null || limits.getLimitUp() == null || limits.getLimitDown() == null) {
                 logger.debug("Лимиты не найдены для инструмента: {} (порог приближения: {}%)", 
-                           figi, approachThreshold.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP));
+                           figi, approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
                 return;
             }
             
@@ -124,10 +150,15 @@ public class LimitMonitorService implements InitializingBean {
             checkLimitApproach(figi, ticker, instrumentName, currentPrice, 
                              limits.getLimitDown(), "DOWN", eventTime, limits);
             
+            // Проверяем исторические экстремумы
+            processHistoricalExtremes(figi, ticker, instrumentName, currentPrice, eventTime);
+            
+            logger.debug("Обработка лимитов для {} ({}): текущая цена={}, порог приближения={}%", 
+                       ticker, figi, currentPrice, approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+            
         } catch (Exception e) {
-            BigDecimal thresholdPercent = approachThreshold.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP);
             logger.error("Ошибка при обработке LAST_PRICE для мониторинга лимитов: {} (порог приближения: {}%)", 
-                        figi, thresholdPercent, e);
+                        figi, approachThresholdPercent.setScale(2, RoundingMode.HALF_UP), e);
         }
     }
     
@@ -145,7 +176,6 @@ public class LimitMonitorService implements InitializingBean {
         // Вычисляем расстояние до лимита в процентах
         BigDecimal distanceToLimit = calculateDistanceToLimit(currentPrice, limitPrice);
         BigDecimal distanceToLimitPercent = distanceToLimit.multiply(new BigDecimal("100"));
-        BigDecimal approachThresholdPercent = approachThreshold.multiply(new BigDecimal("100"));
         
         // Проверяем, достигнут ли лимит
         boolean isLimitReached = isLimitReached(currentPrice, limitPrice, limitType);
@@ -205,6 +235,7 @@ public class LimitMonitorService implements InitializingBean {
             .distanceToLimit(distanceToLimit.multiply(new BigDecimal("100"))) // В процентах
             .isLimitReached(true)
             .isApproachingLimit(false)
+            .isHistorical(false)
             .build();
         
         // Отправляем уведомление
@@ -320,7 +351,9 @@ public class LimitMonitorService implements InitializingBean {
     private void sendLimitAlert(LimitAlertDto alert) {
         try {
             // Формируем ключ кэша: для достижения лимита и приближения используются разные ключи
-            String alertKey = alert.getFigi() + "_" + alert.getLimitType() + "_" + 
+            // Для исторических экстремумов добавляем префикс HISTORICAL_
+            String prefix = alert.isHistorical() ? "HISTORICAL_" : "";
+            String alertKey = prefix + alert.getFigi() + "_" + alert.getLimitType() + "_" + 
                             (alert.isLimitReached() ? "REACHED" : "APPROACHING");
             LocalDate today = LocalDate.now();
             
@@ -343,20 +376,30 @@ public class LimitMonitorService implements InitializingBean {
             
             // Отправляем в Telegram
             if (telegramChannelId != null && !telegramChannelId.trim().isEmpty()) {
-                String alertType = alert.isLimitReached() ? "достижении лимита" : "приближении к лимиту";
-                BigDecimal approachThresholdPercent = approachThreshold.multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP);
+                String alertType = alert.isLimitReached() 
+                    ? (alert.isHistorical() ? "достижении исторического экстремума" : "достижении лимита")
+                    : (alert.isHistorical() ? "приближении к историческому экстремуму" : "приближении к лимиту");
+                BigDecimal thresholdPercent = alert.isHistorical() 
+                    ? historicalApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP)
+                    : approachThresholdPercent.setScale(2, RoundingMode.HALF_UP);
                 logger.info("📤 Отправка уведомления о {} в Telegram канал: {}", alertType, telegramChannelId);
                 logger.info("📊 Данные уведомления:");
+                logger.info("   - Тип: {}", alert.isHistorical() ? "Исторический экстремум" : "Биржевой лимит");
                 logger.info("   - Тикер: {}", alert.getTicker());
                 logger.info("   - FIGI: {}", alert.getFigi());
                 logger.info("   - Тип лимита: {}", alert.getLimitType());
                 logger.info("   - Текущая цена: {} ₽", alert.getCurrentPrice());
-                logger.info("   - Цена лимита: {} ₽", alert.getLimitPrice());
-                logger.info("   - ПОРОГ ПРИБЛИЖЕНИЯ: {}% (настроен в limit.monitor.approach.threshold)", approachThresholdPercent);
+                logger.info("   - Цена лимита/экстремума: {} ₽", alert.getLimitPrice());
+                logger.info("   - ПОРОГ ПРИБЛИЖЕНИЯ: {}% (настроен в {})", 
+                           thresholdPercent, alert.isHistorical() 
+                               ? "limit.monitor.historical.approach.threshold" 
+                               : "limit.monitor.approach.threshold");
                 
                 telegramBotService.sendText(telegramChannelId, message);
                 
-                String statusEmoji = alert.isLimitReached() ? "🚨" : "⚠️";
+                String statusEmoji = alert.isLimitReached() 
+                    ? (alert.isHistorical() ? "🏆" : "🚨") 
+                    : (alert.isHistorical() ? "📈" : "⚠️");
                 logger.info("{} Уведомление о {} успешно отправлено в Telegram канал: {} для тикера: {}", 
                            statusEmoji, alertType, telegramChannelId, alert.getTicker());
             } else {
@@ -366,10 +409,20 @@ public class LimitMonitorService implements InitializingBean {
             }
             
             // Обновляем счетчики
-            if (alert.isLimitReached()) {
-                limitReachedAlerts.incrementAndGet();
+            if (alert.isHistorical()) {
+                // Счетчики для исторических экстремумов
+                if (alert.isLimitReached()) {
+                    historicalExtremeReachedAlerts.incrementAndGet();
+                } else {
+                    historicalExtremeAlerts.incrementAndGet();
+                }
             } else {
-                approachingLimitAlerts.incrementAndGet();
+                // Счетчики для биржевых лимитов
+                if (alert.isLimitReached()) {
+                    limitReachedAlerts.incrementAndGet();
+                } else {
+                    approachingLimitAlerts.incrementAndGet();
+                }
             }
             notificationsSent.incrementAndGet();
             
@@ -389,26 +442,60 @@ public class LimitMonitorService implements InitializingBean {
      */
     private String formatLimitAlertMessage(LimitAlertDto alert) {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
         
         StringBuilder message = new StringBuilder();
-        message.append("🚨 ").append(alert.isLimitReached() ? "ЛИМИТ ДОСТИГНУТ" : "ПРИБЛИЖЕНИЕ К ЛИМИТУ").append("\n\n");
-        message.append("📊 Тикер: ").append(alert.getTicker()).append("\n");
-        message.append("🔗 FIGI: ").append(alert.getFigi()).append("\n");
-        message.append("📅 Дата и время: ").append(alert.getEventTime().format(formatter)).append("\n");
-        message.append("💰 Текущая цена: ").append(alert.getCurrentPrice()).append(" ₽\n");
         
-        if (alert.getClosePriceOs() != null) {
-            message.append("📈 Цена закрытия ОС: ").append(alert.getClosePriceOs()).append(" ₽\n");
-        }
-        if (alert.getClosePriceEvening() != null) {
-            message.append("🌙 Цена закрытия вечерней: ").append(alert.getClosePriceEvening()).append(" ₽\n");
-        }
-        
-        message.append("🎯 Тип лимита: ").append(alert.getLimitType()).append("\n");
-        message.append("📊 Цена лимита: ").append(alert.getLimitPrice()).append(" ₽\n");
-        
-        if (alert.isApproachingLimit()) {
-            message.append("⚠️ Расстояние до лимита: ").append(alert.getDistanceToLimit()).append("%\n");
+        if (alert.isHistorical()) {
+            // Отдельное форматирование для исторических экстремумов
+            if (alert.isLimitReached()) {
+                message.append("🏆 ИСТОРИЧЕСКИЙ ЭКСТРЕМУМ ДОСТИГНУТ\n\n");
+            } else {
+                message.append("📈 ПРИБЛИЖЕНИЕ К ИСТОРИЧЕСКОМУ ЭКСТРЕМУМУ\n\n");
+            }
+            message.append("📊 Тикер: ").append(alert.getTicker()).append("\n");
+            message.append("🔗 FIGI: ").append(alert.getFigi()).append("\n");
+            message.append("📅 Дата и время: ").append(alert.getEventTime().format(formatter)).append("\n");
+            message.append("💰 Текущая цена: ").append(alert.getCurrentPrice()).append(" ₽\n");
+            
+            if (alert.getClosePriceOs() != null) {
+                message.append("📈 Цена закрытия ОС: ").append(alert.getClosePriceOs()).append(" ₽\n");
+            }
+            if (alert.getClosePriceEvening() != null) {
+                message.append("🌙 Цена закрытия вечерней: ").append(alert.getClosePriceEvening()).append(" ₽\n");
+            }
+            
+            message.append("🎯 Тип экстремума: ").append(alert.getLimitType().equals("UP") ? "МАКСИМУМ" : "МИНИМУМ").append("\n");
+            message.append("📊 Исторический экстремум: ").append(alert.getLimitPrice()).append(" ₽\n");
+            
+            if (alert.getHistoricalExtremeDate() != null) {
+                message.append("📆 Дата экстремума: ").append(alert.getHistoricalExtremeDate().format(dateFormatter)).append("\n");
+            }
+            
+            if (alert.isApproachingLimit()) {
+                message.append("⚠️ Расстояние до экстремума: ").append(alert.getDistanceToLimit()).append("%\n");
+            }
+        } else {
+            // Форматирование для биржевых лимитов
+            message.append("🚨 ").append(alert.isLimitReached() ? "ЛИМИТ ДОСТИГНУТ" : "ПРИБЛИЖЕНИЕ К ЛИМИТУ").append("\n\n");
+            message.append("📊 Тикер: ").append(alert.getTicker()).append("\n");
+            message.append("🔗 FIGI: ").append(alert.getFigi()).append("\n");
+            message.append("📅 Дата и время: ").append(alert.getEventTime().format(formatter)).append("\n");
+            message.append("💰 Текущая цена: ").append(alert.getCurrentPrice()).append(" ₽\n");
+            
+            if (alert.getClosePriceOs() != null) {
+                message.append("📈 Цена закрытия ОС: ").append(alert.getClosePriceOs()).append(" ₽\n");
+            }
+            if (alert.getClosePriceEvening() != null) {
+                message.append("🌙 Цена закрытия вечерней: ").append(alert.getClosePriceEvening()).append(" ₽\n");
+            }
+            
+            message.append("🎯 Тип лимита: ").append(alert.getLimitType()).append("\n");
+            message.append("📊 Цена лимита: ").append(alert.getLimitPrice()).append(" ₽\n");
+            
+            if (alert.isApproachingLimit()) {
+                message.append("⚠️ Расстояние до лимита: ").append(alert.getDistanceToLimit()).append("%\n");
+            }
         }
         
         return message.toString();
@@ -483,6 +570,156 @@ public class LimitMonitorService implements InitializingBean {
     }
     
     /**
+     * Обработка исторических экстремумов для мониторинга приближения
+     */
+    private void processHistoricalExtremes(String figi, String ticker, String instrumentName, 
+                                           BigDecimal currentPrice, LocalDateTime eventTime) {
+        try {
+            // Получаем исторические экстремумы для инструмента
+            HistoricalPriceDto historicalPrice = historicalPricesService.getHistoricalPriceByFigi(figi);
+            if (historicalPrice == null || historicalPrice.getHistoricalHigh() == null || 
+                historicalPrice.getHistoricalLow() == null) {
+                logger.debug("Исторические экстремумы не найдены для инструмента: {}", figi);
+                return;
+            }
+            
+            // Проверяем приближение к историческому максимуму
+            checkHistoricalExtremeApproach(figi, ticker, instrumentName, currentPrice, 
+                                         historicalPrice.getHistoricalHigh(), "UP", eventTime, 
+                                         historicalPrice.getHistoricalHighDate(), historicalPrice);
+            
+            // Проверяем приближение к историческому минимуму
+            checkHistoricalExtremeApproach(figi, ticker, instrumentName, currentPrice, 
+                                         historicalPrice.getHistoricalLow(), "DOWN", eventTime, 
+                                         historicalPrice.getHistoricalLowDate(), historicalPrice);
+            
+        } catch (Exception e) {
+            logger.error("Ошибка при обработке исторических экстремумов для {}: {}", figi, e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Проверка приближения к историческому экстремуму и его достижения
+     */
+    private void checkHistoricalExtremeApproach(String figi, String ticker, String instrumentName,
+                                               BigDecimal currentPrice, BigDecimal extremePrice, 
+                                               String limitType, LocalDateTime eventTime, 
+                                               OffsetDateTime extremeDate, HistoricalPriceDto historicalPrice) {
+        
+        if (extremePrice == null) {
+            return;
+        }
+        
+        // Вычисляем расстояние до экстремума в процентах
+        BigDecimal distanceToLimit = calculateDistanceToLimit(currentPrice, extremePrice);
+        BigDecimal distanceToLimitPercent = distanceToLimit.multiply(new BigDecimal("100"));
+        
+        // Проверяем, достигнут ли экстремум
+        boolean isLimitReached = isLimitReached(currentPrice, extremePrice, limitType);
+        
+        // Проверяем, приближается ли к экстремуму
+        boolean isApproachingLimit = distanceToLimit.compareTo(historicalApproachThreshold) <= 0 && !isLimitReached;
+        
+        // Логируем информацию о проверке исторического экстремума
+        logger.debug("Проверка исторического экстремума {} для {} ({}): текущая цена={}, экстремум={}, расстояние={}%, порог приближения={}%", 
+                    limitType, ticker, figi, currentPrice, extremePrice, 
+                    distanceToLimitPercent.setScale(2, RoundingMode.HALF_UP),
+                    historicalApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+        
+        // Приоритет: сначала проверяем достижение экстремума, затем приближение
+        if (isLimitReached) {
+            // Инструмент достиг исторического экстремума - отправляем уведомление о достижении
+            logger.info("🏆 Исторический экстремум {} достигнут для {} ({}): цена={}, экстремум={}, порог приближения={}%", 
+                       limitType, ticker, figi, currentPrice, extremePrice,
+                       historicalApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+            sendHistoricalExtremeReachedNotification(figi, ticker, instrumentName, currentPrice, 
+                                                   extremePrice, limitType, eventTime, extremeDate, 
+                                                   historicalPrice, distanceToLimit);
+        } else if (isApproachingLimit) {
+            // Инструмент приближается к историческому экстремуму - отправляем уведомление о приближении
+            logger.info("📈 Приближение к историческому экстремуму {} для {} ({}): расстояние={}%, порог={}%", 
+                       limitType, ticker, figi, 
+                       distanceToLimitPercent.setScale(2, RoundingMode.HALF_UP),
+                       historicalApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+            sendHistoricalExtremeApproachingNotification(figi, ticker, instrumentName, currentPrice, 
+                                                        extremePrice, limitType, eventTime, extremeDate, 
+                                                        historicalPrice, distanceToLimit);
+        }
+    }
+    
+    /**
+     * Отправка уведомления о достижении исторического экстремума
+     */
+    private void sendHistoricalExtremeReachedNotification(String figi, String ticker, String instrumentName,
+                                                         BigDecimal currentPrice, BigDecimal extremePrice,
+                                                         String limitType, LocalDateTime eventTime, 
+                                                         OffsetDateTime extremeDate, HistoricalPriceDto historicalPrice,
+                                                         BigDecimal distanceToLimit) {
+        // Получаем цены закрытия
+        BigDecimal closePriceOs = getLastClosePrice(figi, "OS");
+        BigDecimal closePriceEvening = getLastClosePrice(figi, "EVENING");
+        
+        // Создаем DTO для уведомления о достижении исторического экстремума
+        LimitAlertDto alert = LimitAlertDto.builder()
+            .figi(figi)
+            .ticker(ticker)
+            .instrumentName(instrumentName)
+            .eventTime(eventTime)
+            .currentPrice(currentPrice)
+            .limitPrice(extremePrice)
+            .limitType(limitType)
+            .limitDown(historicalPrice.getHistoricalLow())
+            .limitUp(historicalPrice.getHistoricalHigh())
+            .closePriceOs(closePriceOs)
+            .closePriceEvening(closePriceEvening)
+            .distanceToLimit(distanceToLimit.multiply(new BigDecimal("100"))) // В процентах
+            .isLimitReached(true)
+            .isApproachingLimit(false)
+            .isHistorical(true)
+            .historicalExtremeDate(extremeDate)
+            .build();
+        
+        // Отправляем уведомление
+        sendLimitAlert(alert);
+    }
+    
+    /**
+     * Отправка уведомления о приближении к историческому экстремуму
+     */
+    private void sendHistoricalExtremeApproachingNotification(String figi, String ticker, String instrumentName,
+                                                             BigDecimal currentPrice, BigDecimal extremePrice,
+                                                             String limitType, LocalDateTime eventTime, 
+                                                             OffsetDateTime extremeDate, HistoricalPriceDto historicalPrice,
+                                                             BigDecimal distanceToLimit) {
+        // Получаем цены закрытия
+        BigDecimal closePriceOs = getLastClosePrice(figi, "OS");
+        BigDecimal closePriceEvening = getLastClosePrice(figi, "EVENING");
+        
+        // Создаем DTO для уведомления о приближении к историческому экстремуму
+        LimitAlertDto alert = LimitAlertDto.builder()
+            .figi(figi)
+            .ticker(ticker)
+            .instrumentName(instrumentName)
+            .eventTime(eventTime)
+            .currentPrice(currentPrice)
+            .limitPrice(extremePrice)
+            .limitType(limitType)
+            .limitDown(historicalPrice.getHistoricalLow())
+            .limitUp(historicalPrice.getHistoricalHigh())
+            .closePriceOs(closePriceOs)
+            .closePriceEvening(closePriceEvening)
+            .distanceToLimit(distanceToLimit.multiply(new BigDecimal("100"))) // В процентах
+            .isLimitReached(false)
+            .isApproachingLimit(true)
+            .isHistorical(true)
+            .historicalExtremeDate(extremeDate)
+            .build();
+        
+        // Отправляем уведомление
+        sendLimitAlert(alert);
+    }
+    
+    /**
      * Получение статистики мониторинга лимитов
      */
     public Map<String, Object> getStatistics() {
@@ -505,9 +742,14 @@ public class LimitMonitorService implements InitializingBean {
             "totalAlertsProcessed", totalAlertsProcessed.get(),
             "approachingLimitAlerts", approachingLimitAlerts.get(),
             "limitReachedAlerts", limitReachedAlerts.get(),
+            "historicalExtremeAlerts", historicalExtremeAlerts.get(),
+            "historicalExtremeReachedAlerts", historicalExtremeReachedAlerts.get(),
             "notificationsSent", notificationsSent.get(),
             "dailyNotificationsCount", notificationsCacheSize,
             "telegramChannelConfigured", telegramChannelId != null && !telegramChannelId.trim().isEmpty()
         );
     }
+
+
+    
 }

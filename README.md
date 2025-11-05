@@ -65,11 +65,20 @@ java -jar target/investment-data-stream-service-*.jar --spring.profiles.active=p
 ### 3. Проверка работы
 
 ```bash
-# Статистика сервиса
-curl http://localhost:8084/api/streaming-service/stats
+# Запуск стрима trades
+curl -X POST http://localhost:8084/api/stream/trades/start
 
-# Запуск потоков данных
-curl -X POST http://localhost:8084/api/streaming-service/start
+# Запуск стрима минутных свечей
+curl -X POST http://localhost:8084/api/stream/minute-candles/start
+
+# Запуск стрима цен последних сделок
+curl -X POST http://localhost:8084/api/stream/last-price/start
+
+# Получение метрик стрима trades
+curl http://localhost:8084/api/stream/trades/metrics
+
+# Получение всех акций
+curl http://localhost:8084/api/instruments/shares
 
 # Telegram бот
 # Найдите вашего бота в Telegram и отправьте /start
@@ -91,19 +100,36 @@ curl -X POST http://localhost:8084/api/streaming-service/start
 
 ## 🎯 Основные возможности
 
-- **📡 Потоковые данные**: Сделки и свечи в реальном времени
+- **📡 Потоковые данные**: 
+  - Trade Stream - обезличенные сделки (`/api/stream/trades`)
+  - MinuteCandle Stream - минутные свечи (`/api/stream/minute-candles`)
+  - LastPrice Stream - цены последних сделок (`/api/stream/last-price`)
+  - Limit Monitoring Stream - мониторинг лимитов (`/api/stream/limits`)
 - **🤖 Telegram Bot**: Мониторинг и уведомления
-- **💾 Кэширование**: Быстрый доступ к инструментам
-- **📊 Мониторинг**: Детальная статистика и метрики
-- **🔧 Надежность**: Автоматическое восстановление
+- **💾 Кэширование**: Быстрый доступ к инструментам (`/api/cache`)
+- **📊 Мониторинг**: Детальная статистика и метрики для каждого стрима
+- **🔧 Надежность**: Независимые стримы, автоматическое восстановление
 
 ## 🏗️ Архитектура
 
+Сервис использует модульную архитектуру с независимыми стримами:
+
 ```
-Tinkoff API → Stream Service → PostgreSQL
-                    ↓
-              REST API + Telegram Bot
+Tinkoff API (gRPC Streams)
+    ↓
+Investment Data Stream Service
+    ├── Trade Stream → invest.trades
+    ├── MinuteCandle Stream → invest.minute_candles
+    ├── LastPrice Stream → invest.last_prices
+    └── Limit Monitoring Stream → Telegram Notifications
+    ↓
+REST API + Telegram Bot
+    ├── /api/stream/* - управление стримами
+    ├── /api/cache/* - управление кэшем
+    └── /api/instruments/* - работа с инструментами
 ```
+
+Подробнее: [docs/ARCHITECTURE_DIAGRAM.md](docs/ARCHITECTURE_DIAGRAM.md) | [docs/NEW_STREAMING_ARCHITECTURE.md](docs/NEW_STREAMING_ARCHITECTURE.md)
 
 ## ⚙️ Конфигурация
 
@@ -127,15 +153,23 @@ Tinkoff API → Stream Service → PostgreSQL
 ### REST API
 
 ```bash
-# Статистика сервиса
-GET /api/streaming-service/stats
+# Управление стримами
+POST /api/stream/trades/start          # Запуск стрима trades
+POST /api/stream/trades/stop           # Остановка стрима trades
+GET  /api/stream/trades/metrics        # Метрики стрима trades
 
-# Управление потоками
-POST /api/streaming-service/start
-POST /api/streaming-service/stop
+POST /api/stream/minute-candles/start  # Запуск стрима свечей
+POST /api/stream/last-price/start      # Запуск стрима цен
+POST /api/stream/limits/start          # Запуск мониторинга лимитов
 
-# Статистика свечей
-GET /api/candles/subscription/stats
+# Управление кэшем
+POST /api/cache/warmup                 # Прогрев кэша
+GET  /api/cache/stats                   # Статистика кэша
+
+# Работа с инструментами
+GET  /api/instruments/shares            # Все акции
+GET  /api/instruments/search?q=SBER     # Поиск инструментов
+GET  /api/instruments/limits/{figi}     # Лимиты инструмента
 ```
 
 ### Telegram Bot
@@ -199,5 +233,12 @@ logs/prod/current/
 
 ---
 
-**Версия**: 1.1  
-**Последнее обновление**: 2024-01-15
+**Версия**: 2.0  
+**Последнее обновление**: 2025-11-03
+
+### 🔄 Последние обновления
+
+- ✅ Новая модульная архитектура с независимыми стримами
+- ✅ Отдельные контроллеры для каждого типа стрима
+- ✅ Каждый стрим имеет свой процессор и таблицу в БД
+- ✅ Обновлена документация API

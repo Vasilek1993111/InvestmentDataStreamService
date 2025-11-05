@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * DTO для данных о приближении к лимитам инструмента
@@ -34,4 +35,6 @@ public class LimitAlertDto {
     private BigDecimal distanceToLimit; // Расстояние до лимита в процентах
     private boolean isLimitReached; // Достигнут ли лимит
     private boolean isApproachingLimit; // Приближается ли к лимиту (1%)
+    private boolean isHistorical; // Флаг для исторических экстремумов (true) или биржевых лимитов (false)
+    private OffsetDateTime historicalExtremeDate; // Дата исторического экстремума (для исторических лимитов)
 }

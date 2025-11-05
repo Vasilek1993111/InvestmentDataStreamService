@@ -3,9 +3,9 @@
 CREATE SCHEMA IF NOT EXISTS invest_ref;
 
 --Справочник акций
-create table shares
+create table invest_ref.shares
 (
-    figi           varchar(255) not null primary key,
+    figi           varchar(255) not null,
     ticker         varchar(255),
     name           varchar(255),
     currency       varchar(255),
@@ -13,19 +13,17 @@ create table shares
     sector         varchar(255),
     trading_status varchar(255),
     short_enabled  boolean,
-    asset_uid      varchar(255),
     created_at     timestamp with time zone default (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Moscow'::text),
     updated_at     timestamp with time zone default (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Moscow'::text),
-    short_enabled boolean,
     asset_uid character varying(255),
     min_price_increment numeric,
     lot integer,
     CONSTRAINT shares_pkey PRIMARY KEY (figi)
 );
 
-comment on table shares is 'Справочник акций';
+comment on table invest_ref.shares is 'Справочник акций';
 
-comment on column invest_ref.   shares.figi is 'Уникальный идентификатор инструмента (Financial Instrument Global Identifier)';
+comment on column invest_ref.shares.figi is 'Уникальный идентификатор инструмента (Financial Instrument Global Identifier)';
 
 comment on column invest_ref.shares.ticker is 'Тикер акции';
 
@@ -48,20 +46,16 @@ comment on column invest_ref.shares.created_at is 'Дата и время соз
 comment on column invest_ref.shares.updated_at is 'Дата и время последнего обновления записи (московское время)';
 
 -- Добавляем комментарии для новых колонок
-comment on column shares.short_enabled is 'Флаг доступности для коротких продаж (short)';
+comment on column invest_ref.shares.min_price_increment is 'Минимальный шаг цены инструмента';
 
-comment on column shares.asset_uid is 'Уникальный идентификатор актива';
+comment on column invest_ref.shares.lot is 'Лотность инструмента';
 
-comment on column shares.min_price_increment is 'Минимальный шаг цены инструмента';
-
-comment on column shares.lot is 'Лотность инструмента';
-
-alter table shares
+alter table invest_ref.shares
     owner to postgres;
 
 
 --Справочник фьючерсов
-create table futures
+create table invest_ref.futures
 (
     figi        varchar(255) not null primary key,
     asset_type  varchar(255),
@@ -108,12 +102,12 @@ comment on column invest_ref.futures.basic_asset_size is 'Размер базо�
 
 
 
-alter table futures
+alter table invest_ref.futures
     owner to postgres;
 
 
 --Справочник индикативов
-create table indicatives
+create table invest_ref.indicatives
 (
     figi                varchar(255) not null
         primary key,
@@ -153,7 +147,7 @@ comment on column invest_ref.indicatives.created_at is 'Дата создани�
 
 comment on column invest_ref.indicatives.updated_at is 'Дата последнего обновления записи (UTC+3)';
 
-alter table indicatives
+alter table invest_ref.indicatives
     owner to postgres;
 
 
@@ -415,4 +409,3 @@ select * from invest_ref.fundamentals;
 comment on view invest.fundamentals is 'Синоним для таблицы fundamentals из схемы invest_ref';
 
 alter view invest.fundamentals owner to postgres;
-

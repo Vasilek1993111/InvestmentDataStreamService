@@ -6,12 +6,17 @@ import com.example.investmentdatastreamservice.entity.ShareEntity;
 import com.example.investmentdatastreamservice.repository.FutureRepository;
 import com.example.investmentdatastreamservice.repository.IndicativeRepository;
 import com.example.investmentdatastreamservice.repository.ShareRepository;
+import com.example.investmentdatastreamservice.repository.HistoricalPriceRepository;
+import com.example.investmentdatastreamservice.dto.HistoricalPriceDto;
+import com.example.investmentdatastreamservice.mapper.HistoricalPriceMapper;
 import com.example.investmentdatastreamservice.dto.LimitsDto;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -47,13 +52,18 @@ public class CacheWarmupService {
     private final FutureRepository futureRepository;
     private final IndicativeRepository indicativeRepository;
     private final LimitsService limitsService;
-
+    private final HistoricalPriceRepository historicalPriceRepository;
+    private final CacheManager cacheManager;
+    
     public CacheWarmupService(ShareRepository shareRepository, FutureRepository futureRepository,
-            IndicativeRepository indicativeRepository, LimitsService limitsService) {
+            IndicativeRepository indicativeRepository, LimitsService limitsService, 
+            HistoricalPriceRepository historicalPriceRepository, CacheManager cacheManager) {
         this.shareRepository = shareRepository;
         this.futureRepository = futureRepository;
         this.indicativeRepository = indicativeRepository;
         this.limitsService = limitsService;
+        this.historicalPriceRepository = historicalPriceRepository;
+        this.cacheManager = cacheManager;
     }
 
     /**
@@ -89,10 +99,16 @@ public class CacheWarmupService {
 
             // Прогреваем кэш лимитов для акций и фьючерсов
             warmupLimitsCache(shares, futures);
+            
+            
+            // Прогреваем кэш исторических цен
+            warmupHistoricalPricesCache();
 
             long duration = System.currentTimeMillis() - startTime;
             logger.info("Прогрев кэша завершен за {} мс. Всего инструментов: {}", duration,
                     shares.size() + futures.size() + indicatives.size());
+
+            
 
         } catch (Exception e) {
             logger.error("Ошибка при автоматическом прогреве кэша: {}", e.getMessage(), e);
@@ -132,6 +148,9 @@ public class CacheWarmupService {
 
             // Прогреваем кэш лимитов для акций и фьючерсов
             warmupLimitsCache(shares, futures);
+
+            // Прогреваем кэш исторических цен
+            warmupHistoricalPricesCache();
 
             long duration = System.currentTimeMillis() - startTime;
             logger.info("Ручной прогрев кэша завершен за {} мс. Всего инструментов: {}", duration,
@@ -195,10 +214,10 @@ public class CacheWarmupService {
      * Очистить все кэши инструментов
      * 
      * <p>
-     * Удаляет все записи из кэшей акций, фьючерсов и индикативных инструментов.
+     * Удаляет все записи из кэшей акций, фьючерсов, индикативных инструментов и исторических цен.
      * </p>
      */
-    @CacheEvict(value = {"sharesCache", "futuresCache", "indicativesCache"}, allEntries = true)
+    @CacheEvict(value = {"sharesCache", "futuresCache", "indicativesCache", "historicalPricesCache"}, allEntries = true)
     public void evictAllCaches() {
         logger.info("Все кэши инструментов очищены");
     }
@@ -285,6 +304,138 @@ public class CacheWarmupService {
         if (errorCount > 0) {
             logger.warn("При прогреве кэша лимитов произошло {} ошибок. Проверьте подключение к Tinkoff API и токен аутентификации.", errorCount);
         }
+    }
+
+    /**
+     * Прогрев кэша исторических цен
+     * 
+     * Загружает все исторические цены из БД и сохраняет в кэш:
+     * 1. Весь список с ключом 'all' (для получения всех цен сразу)
+     * 2. Каждая запись по FIGI (для быстрого доступа по конкретному инструменту)
+     * 
+     * Использует принудительное сохранение через CacheManager, так как @Cacheable не работает
+     * при вызове методов изнутри класса (ограничение Spring AOP).
+     */
+    private void warmupHistoricalPricesCache() {
+        logger.info("📊 Начинается прогрев кэша исторических цен...");
+        
+        long startTime = System.currentTimeMillis();
+        try {
+            Cache cache = cacheManager.getCache("historicalPricesCache");
+            if (cache == null) {
+                logger.error("❌ Кэш 'historicalPricesCache' не найден!");
+                return;
+            }
+            
+            // Загружаем все исторические цены напрямую из репозитория (без сервиса, чтобы избежать лишних вызовов)
+            List<HistoricalPriceDto> historicalPrices = historicalPriceRepository.findAll().stream()
+                    .map(HistoricalPriceMapper.INSTANCE::toDto)
+                    .toList();
+            logger.info("📊 Загружено {} исторических цен из БД", historicalPrices.size());
+            
+            // Сохраняем весь список в кэш с ключом 'all'
+            cache.put("all", historicalPrices);
+            logger.info("📊 Весь список исторических цен сохранен в кэш с ключом 'all'");
+            
+            // Сохраняем каждую запись по FIGI для быстрого доступа
+            int successCount = 0;
+            for (HistoricalPriceDto historicalPrice : historicalPrices) {
+                if (historicalPrice != null && historicalPrice.getFigi() != null) {
+                    try {
+                        // Принудительно сохраняем в кэш по ключу FIGI
+                        cache.put(historicalPrice.getFigi(), historicalPrice);
+                        successCount++;
+                    } catch (Exception e) {
+                        logger.debug("❌ Ошибка при сохранении исторических цен для {} в кэш: {}", 
+                                historicalPrice.getFigi(), e.getMessage());
+                    }
+                }
+            }
+            
+            long duration = System.currentTimeMillis() - startTime;
+            logger.info("📊 Прогрев кэша исторических цен завершен за {} мс. Сохранено записей: {} (всего: {})", 
+                    duration, successCount, historicalPrices.size());
+        } catch (Exception e) {
+            logger.error("❌ Ошибка при прогреве кэша исторических цен: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Обновление кэша исторических цен
+     * 
+     * Очищает кэш и загружает данные заново из БД.
+     * Использует принудительное сохранение через CacheManager для гарантированного попадания в кэш.
+     * 
+     * @return статистика обновления
+     */
+    public java.util.Map<String, Object> refreshHistoricalPricesCache() {
+        logger.info("🔄 Начинается обновление кэша исторических цен...");
+        
+        long startTime = System.currentTimeMillis();
+        try {
+            Cache cache = cacheManager.getCache("historicalPricesCache");
+            if (cache == null) {
+                logger.error("❌ Кэш 'historicalPricesCache' не найден!");
+                return java.util.Map.of(
+                    "success", false,
+                    "error", "Кэш 'historicalPricesCache' не найден",
+                    "durationMs", System.currentTimeMillis() - startTime
+                );
+            }
+            
+            // Очищаем кэш
+            evictHistoricalPricesCache();
+            
+            // Загружаем данные заново напрямую из репозитория (без сервиса, чтобы избежать лишних вызовов)
+            List<HistoricalPriceDto> historicalPrices = historicalPriceRepository.findAll().stream()
+                    .map(HistoricalPriceMapper.INSTANCE::toDto)
+                    .toList();
+            logger.info("📊 Загружено {} исторических цен из БД", historicalPrices.size());
+            
+            // Сохраняем весь список в кэш с ключом 'all'
+            cache.put("all", historicalPrices);
+            
+            // Сохраняем каждую запись по FIGI для быстрого доступа
+            int successCount = 0;
+            for (HistoricalPriceDto historicalPrice : historicalPrices) {
+                if (historicalPrice != null && historicalPrice.getFigi() != null) {
+                    try {
+                        // Принудительно сохраняем в кэш по ключу FIGI
+                        cache.put(historicalPrice.getFigi(), historicalPrice);
+                        successCount++;
+                    } catch (Exception e) {
+                        logger.debug("❌ Ошибка при сохранении исторических цен для {} в кэш: {}", 
+                                historicalPrice.getFigi(), e.getMessage());
+                    }
+                }
+            }
+            
+            long duration = System.currentTimeMillis() - startTime;
+            logger.info("✅ Обновление кэша исторических цен завершено за {} мс. Сохранено записей: {} (всего: {})", 
+                    duration, successCount, historicalPrices.size());
+            
+            return java.util.Map.of(
+                "success", true,
+                "successCount", successCount,
+                "totalCount", historicalPrices.size(),
+                "durationMs", duration
+            );
+        } catch (Exception e) {
+            logger.error("❌ Ошибка при обновлении кэша исторических цен: {}", e.getMessage(), e);
+            return java.util.Map.of(
+                "success", false,
+                "error", e.getMessage(),
+                "durationMs", System.currentTimeMillis() - startTime
+            );
+        }
+    }
+    
+    /**
+     * Очистить кэш исторических цен
+     */
+    @CacheEvict(value = "historicalPricesCache", allEntries = true)
+    public void evictHistoricalPricesCache() {
+        logger.info("🗑️ Кэш исторических цен очищен");
     }
 }
 

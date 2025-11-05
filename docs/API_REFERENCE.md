@@ -29,148 +29,393 @@ http://localhost:8084
 
 Подробная документация: [TELEGRAM_BOT.md](TELEGRAM_BOT.md)
 
+## Архитектура API
+
+Сервис использует модульную архитектуру с независимыми стримами для каждого типа данных:
+
+- **Trade Stream** - обезличенные сделки (`/api/stream/trades`)
+- **MinuteCandle Stream** - минутные свечи (`/api/stream/minute-candles`)
+- **LastPrice Stream** - цены последних сделок (`/api/stream/last-price`)
+- **Limit Monitoring Stream** - мониторинг лимитов (`/api/stream/limits`)
+- **Cache Management** - управление кэшем (`/api/cache`)
+- **Instruments** - работа с инструментами (`/api/instruments`)
+
 ## Endpoints
 
-### 1. Статистика сервиса
+### Stream Endpoints
 
-**GET** `/api/streaming-service/stats`
+Каждый стрим имеет стандартный набор endpoints:
 
-Возвращает детальную статистику работы сервиса потоковых данных.
+#### Trade Stream (`/api/stream/trades`)
 
-#### Ответ
+**POST** `/api/stream/trades/start`
 
+Запускает стрим обезличенных сделок. Данные сохраняются в таблицу `invest.trades`.
+
+**Ответ:**
 ```json
 {
+  "success": true,
+  "message": "Trade streaming started successfully",
+  "service": "TradeStreamingService",
+  "timestamp": "2025-11-03T10:00:00"
+}
+```
+
+**POST** `/api/stream/trades/stop`
+
+Останавливает стрим обезличенных сделок.
+
+**POST** `/api/stream/trades/reconnect`
+
+Инициирует переподключение стрима.
+
+**GET** `/api/stream/trades/status`
+
+Возвращает текущее состояние стрима.
+
+**Ответ:**
+```json
+{
+  "service": "TradeStreamingService",
   "running": true,
   "connected": true,
-  "totalTradeProcessed": 331,
-  "totalTradeErrors": 0,
-  "totalReceived": 35,
-  "totalTradeReceived": 136,
-  "totalCandleReceived": 160,
-  "totalCandleInserted": 331,
-  "totalTradeInserted": 0,
-  "totalCandleReceivedShares": 122,
-  "totalCandleReceivedFutures": 38,
-  "totalCandleReceivedIndicatives": 0,
-  "totalErrorsAll": 0,
-  "totalProcessedAll": 331,
-  "totalReceivedAll": 171,
-  "tradeQueueSize": 0,
-  "tradeBufferCapacity": 200,
-  "availableTradeInserts": 200,
-  "tradeInsertUtilization": 0.0,
-  "overallErrorRate": 0.0,
-  "overallProcessingRate": 1.935672514619883,
-  "tradeProcessingRate": 2.4338235294117645,
-  "tradeErrorRate": 0.0,
-  "maxConcurrentTradeInserts": 200
+  "timestamp": "2025-11-03T10:05:00"
 }
 ```
 
-#### Коды ответов
+**GET** `/api/stream/trades/metrics`
 
-- `200 OK` - Статистика успешно получена
-- `500 Internal Server Error` - Ошибка сервера
+Возвращает метрики производительности стрима.
 
-### 2. Управление сервисом
-
-**POST** `/api/streaming-service/start`
-
-Запускает сервис потоковых данных.
-
-#### Ответ
-
+**Ответ:**
 ```json
 {
-  "message": "Streaming service started successfully",
-  "status": "success"
+  "service": "TradeStreamingService",
+  "running": true,
+  "connected": true,
+  "totalReceived": 15000,
+  "totalProcessed": 14950,
+  "totalErrors": 5,
+  "totalDropped": 45,
+  "timestamp": "2025-11-03T10:05:00"
 }
 ```
 
-#### Коды ответов
+#### MinuteCandle Stream (`/api/stream/minute-candles`)
 
-- `200 OK` - Сервис успешно запущен
-- `409 Conflict` - Сервис уже запущен
-- `500 Internal Server Error` - Ошибка запуска
+**POST** `/api/stream/minute-candles/start`
 
-**POST** `/api/streaming-service/stop`
+Запускает стрим минутных свечей. Данные сохраняются в таблицу `invest.minute_candles`.
 
-Останавливает сервис потоковых данных.
-
-#### Ответ
-
+**Ответ:**
 ```json
 {
-  "message": "Streaming service stopped successfully",
-  "status": "success"
+  "success": true,
+  "message": "MinuteCandle streaming started successfully",
+  "service": "MinuteCandleStreamingService",
+  "timestamp": "2025-11-03T10:00:00"
 }
 ```
 
-#### Коды ответов
+**POST** `/api/stream/minute-candles/stop`
 
-- `200 OK` - Сервис успешно остановлен
-- `409 Conflict` - Сервис уже остановлен
-- `500 Internal Server Error` - Ошибка остановки
+Останавливает стрим минутных свечей.
 
-### 3. Проверка здоровья
+**POST** `/api/stream/minute-candles/reconnect`
 
-**GET** `/api/streaming-service/health`
+Инициирует переподключение стрима.
 
-Проверяет состояние сервиса.
+**GET** `/api/stream/minute-candles/status`
 
-#### Ответ
+Возвращает текущее состояние стрима.
 
+**GET** `/api/stream/minute-candles/metrics`
+
+Возвращает метрики производительности стрима.
+
+#### LastPrice Stream (`/api/stream/last-price`)
+
+**POST** `/api/stream/last-price/start`
+
+Запускает стрим цен последних сделок. Данные сохраняются в таблицу `invest.last_prices`.
+
+**Ответ:**
 ```json
 {
-  "status": "UP",
-  "details": {
-    "streamingService": {
-      "status": "UP",
-      "details": {
-        "running": true,
-        "connected": true,
-        "lastUpdate": "2024-01-15T10:30:00Z"
+  "success": true,
+  "message": "LastPrice streaming started successfully",
+  "service": "LastPriceStreamingService",
+  "timestamp": "2025-11-03T10:00:00"
+}
+```
+
+**POST** `/api/stream/last-price/stop`
+
+Останавливает стрим цен последних сделок.
+
+**POST** `/api/stream/last-price/reconnect`
+
+Инициирует переподключение стрима.
+
+**GET** `/api/stream/last-price/status`
+
+Возвращает текущее состояние стрима.
+
+**GET** `/api/stream/last-price/metrics`
+
+Возвращает метрики производительности стрима.
+
+#### Limit Monitoring Stream (`/api/stream/limits`)
+
+**POST** `/api/stream/limits/start`
+
+Запускает стрим мониторинга лимитов. Использует LastPrice для отслеживания приближения к лимитам и отправки уведомлений в Telegram.
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "message": "Limit monitoring streaming started successfully",
+  "service": "LimitMonitoringStreamingService",
+  "timestamp": "2025-11-03T10:00:00"
+}
+```
+
+**POST** `/api/stream/limits/stop`
+
+Останавливает стрим мониторинга лимитов.
+
+**POST** `/api/stream/limits/reconnect`
+
+Инициирует переподключение стрима.
+
+**GET** `/api/stream/limits/status`
+
+Возвращает текущее состояние стрима.
+
+**GET** `/api/stream/limits/metrics`
+
+Возвращает метрики производительности стрима.
+
+### Cache Management (`/api/cache`)
+
+**POST** `/api/cache/warmup`
+
+Принудительно прогревает все кэши инструментов (акции, фьючерсы, индикативы).
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "message": "Кэш успешно прогрет",
+  "timestamp": "2025-11-03T10:30:00"
+}
+```
+
+**GET** `/api/cache/content`
+
+Возвращает содержимое кэша.
+
+**Параметры запроса:**
+- `cacheName` (опционально) - имя конкретного кэша (`sharesCache`, `futuresCache`, `indicativesCache`)
+- `limit` (опционально, по умолчанию 100) - максимальное количество записей для отображения
+
+**Примеры:**
+```
+GET /api/cache/content
+GET /api/cache/content?cacheName=sharesCache
+GET /api/cache/content?limit=50
+```
+
+**GET** `/api/cache/stats`
+
+Возвращает статистику по всем кэшам.
+
+**Ответ:**
+```json
+{
+  "timestamp": "2025-11-03T10:30:00",
+  "totalCaches": 3,
+  "activeCaches": 3,
+  "totalEntries": 1500,
+  "cacheDetails": {
+    "sharesCache": {
+      "entryCount": 1000,
+      "statistics": {
+        "hitCount": 5000,
+        "missCount": 100,
+        "hitRate": 0.98,
+        "evictionCount": 0
       }
     }
   }
 }
 ```
 
-#### Коды ответов
+**DELETE** `/api/cache/clear`
 
-- `200 OK` - Сервис работает нормально
-- `503 Service Unavailable` - Сервис недоступен
+Очищает кэш.
+
+**Параметры запроса:**
+- `cacheName` (опционально) - имя конкретного кэша для очистки
+
+**Примеры:**
+```
+DELETE /api/cache/clear
+DELETE /api/cache/clear?cacheName=sharesCache
+```
+
+### Instruments (`/api/instruments`)
+
+**GET** `/api/instruments/shares`
+
+Возвращает все акции из кэша.
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "count": 150,
+  "data": [
+    {
+      "figi": "BBG004730N88",
+      "ticker": "SBER",
+      "name": "Сбербанк",
+      ...
+    }
+  ],
+  "timestamp": "2025-11-03T10:30:00"
+}
+```
+
+**GET** `/api/instruments/shares/{figi}`
+
+Возвращает акцию по FIGI.
+
+**GET** `/api/instruments/futures`
+
+Возвращает все фьючерсы из кэша.
+
+**GET** `/api/instruments/futures/{figi}`
+
+Возвращает фьючерс по FIGI.
+
+**GET** `/api/instruments/indicatives`
+
+Возвращает все индикативные инструменты из кэша.
+
+**GET** `/api/instruments/indicatives/{figi}`
+
+Возвращает индикативный инструмент по FIGI.
+
+**GET** `/api/instruments/search?q={query}`
+
+Поиск инструментов по тикеру или названию.
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "query": "SBER",
+  "results": {
+    "shares": [...],
+    "futures": [...],
+    "indicatives": [...]
+  },
+  "totalCount": 5,
+  "timestamp": "2025-11-03T10:30:00"
+}
+```
+
+**GET** `/api/instruments/summary`
+
+Возвращает статистику по инструментам.
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "shares": 150,
+  "futures": 50,
+  "indicatives": 10,
+  "total": 210,
+  "timestamp": "2025-11-03T10:30:00"
+}
+```
+
+**GET** `/api/instruments/limits/{figi}`
+
+Возвращает лимиты для инструмента по FIGI из кэша.
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "figi": "BBG004730N88",
+  "data": {
+    "limitDown": 250.0,
+    "limitUp": 350.0
+  },
+  "fromCache": true,
+  "timestamp": "2025-11-03T10:30:00"
+}
+```
+
+**GET** `/api/instruments/limits/shares`
+
+Возвращает лимиты для всех акций из кэша.
+
+**GET** `/api/instruments/limits/futures`
+
+Возвращает лимиты для всех фьючерсов из кэша.
+
+**GET** `/api/instruments/limits/summary`
+
+Возвращает статистику по лимитам из кэша.
+
+**GET** `/api/instruments/limits/cache-stats`
+
+Возвращает статистику кэша лимитов.
 
 ## Примеры использования
 
 ### cURL
 
 ```bash
-# Получить статистику
-curl -X GET http://localhost:8084/api/streaming-service/stats
+# Запуск стрима trades
+curl -X POST http://localhost:8084/api/stream/trades/start
 
-# Запустить сервис
-curl -X POST http://localhost:8084/api/streaming-service/start
+# Получение метрик стрима trades
+curl http://localhost:8084/api/stream/trades/metrics
 
-# Остановить сервис
-curl -X POST http://localhost:8084/api/streaming-service/stop
+# Получение всех акций
+curl http://localhost:8084/api/instruments/shares
 
-# Проверить здоровье
-curl -X GET http://localhost:8084/api/streaming-service/health
+# Поиск инструментов
+curl "http://localhost:8084/api/instruments/search?q=SBER"
+
+# Прогрев кэша
+curl -X POST http://localhost:8084/api/cache/warmup
+
+# Статистика кэша
+curl http://localhost:8084/api/cache/stats
 ```
 
 ### PowerShell
 
 ```powershell
-# Получить статистику
-Invoke-RestMethod -Uri "http://localhost:8084/api/streaming-service/stats" -Method GET
+# Запуск стрима trades
+Invoke-RestMethod -Uri "http://localhost:8084/api/stream/trades/start" -Method POST
 
-# Запустить сервис
-Invoke-RestMethod -Uri "http://localhost:8084/api/streaming-service/start" -Method POST
+# Получение метрик стрима trades
+Invoke-RestMethod -Uri "http://localhost:8084/api/stream/trades/metrics" -Method GET
 
-# Остановить сервис
-Invoke-RestMethod -Uri "http://localhost:8084/api/streaming-service/stop" -Method POST
+# Получение всех акций
+Invoke-RestMethod -Uri "http://localhost:8084/api/instruments/shares" -Method GET
+
+# Поиск инструментов
+Invoke-RestMethod -Uri "http://localhost:8084/api/instruments/search?q=SBER" -Method GET
 ```
 
 ### JavaScript (Node.js)
@@ -178,25 +423,47 @@ Invoke-RestMethod -Uri "http://localhost:8084/api/streaming-service/stop" -Metho
 ```javascript
 const axios = require("axios");
 
-// Получить статистику
-async function getStats() {
+const BASE_URL = "http://localhost:8084";
+
+// Запуск стрима trades
+async function startTradeStream() {
   try {
-    const response = await axios.get(
-      "http://localhost:8084/api/streaming-service/stats"
-    );
+    const response = await axios.post(`${BASE_URL}/api/stream/trades/start`);
     console.log(response.data);
   } catch (error) {
     console.error("Error:", error.message);
   }
 }
 
-// Запустить сервис
-async function startService() {
+// Получение метрик стрима trades
+async function getTradeMetrics() {
   try {
-    const response = await axios.post(
-      "http://localhost:8084/api/streaming-service/start"
-    );
-    console.log(response.data);
+    const response = await axios.get(`${BASE_URL}/api/stream/trades/metrics`);
+    console.log(`Total received: ${response.data.totalReceived}`);
+    console.log(`Total processed: ${response.data.totalProcessed}`);
+    console.log(`Total errors: ${response.data.totalErrors}`);
+  } catch (error) {
+    console.error("Error:", error.message);
+  }
+}
+
+// Получение всех акций
+async function getAllShares() {
+  try {
+    const response = await axios.get(`${BASE_URL}/api/instruments/shares`);
+    console.log(`Total shares: ${response.data.count}`);
+    console.log(response.data.data);
+  } catch (error) {
+    console.error("Error:", error.message);
+  }
+}
+
+// Поиск инструментов
+async function searchInstruments(query) {
+  try {
+    const response = await axios.get(`${BASE_URL}/api/instruments/search?q=${query}`);
+    console.log(`Found ${response.data.totalCount} instruments`);
+    console.log(response.data.results);
   } catch (error) {
     console.error("Error:", error.message);
   }
@@ -208,31 +475,55 @@ async function startService() {
 ```python
 import requests
 
-# Получить статистику
-def get_stats():
+BASE_URL = "http://localhost:8084"
+
+# Запуск стрима trades
+def start_trade_stream():
     try:
-        response = requests.get('http://localhost:8084/api/streaming-service/stats')
+        response = requests.post(f"{BASE_URL}/api/stream/trades/start")
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
         print(f"Error: {e}")
         return None
 
-# Запустить сервис
-def start_service():
+# Получение метрик стрима trades
+def get_trade_metrics():
     try:
-        response = requests.post('http://localhost:8084/api/streaming-service/start')
+        response = requests.get(f"{BASE_URL}/api/stream/trades/metrics")
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        print(f"Total received: {data['totalReceived']}")
+        print(f"Total processed: {data['totalProcessed']}")
+        print(f"Total errors: {data['totalErrors']}")
+        return data
     except requests.exceptions.RequestException as e:
         print(f"Error: {e}")
         return None
 
-# Использование
-stats = get_stats()
-if stats:
-    print(f"Service running: {stats['running']}")
-    print(f"Total trades processed: {stats['totalTradeProcessed']}")
+# Получение всех акций
+def get_all_shares():
+    try:
+        response = requests.get(f"{BASE_URL}/api/instruments/shares")
+        response.raise_for_status()
+        data = response.json()
+        print(f"Total shares: {data['count']}")
+        return data
+    except requests.exceptions.RequestException as e:
+        print(f"Error: {e}")
+        return None
+
+# Поиск инструментов
+def search_instruments(query):
+    try:
+        response = requests.get(f"{BASE_URL}/api/instruments/search?q={query}")
+        response.raise_for_status()
+        data = response.json()
+        print(f"Found {data['totalCount']} instruments")
+        return data
+    except requests.exceptions.RequestException as e:
+        print(f"Error: {e}")
+        return None
 ```
 
 ## Обработка ошибок
@@ -242,7 +533,6 @@ if stats:
 - `200 OK` - Успешный запрос
 - `400 Bad Request` - Некорректный запрос
 - `404 Not Found` - Ресурс не найден
-- `409 Conflict` - Конфликт состояния (например, попытка запустить уже запущенный сервис)
 - `500 Internal Server Error` - Внутренняя ошибка сервера
 - `503 Service Unavailable` - Сервис временно недоступен
 
@@ -250,33 +540,39 @@ if stats:
 
 ```json
 {
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "status": 500,
-  "error": "Internal Server Error",
-  "message": "Failed to start streaming service",
-  "path": "/api/streaming-service/start"
+  "success": false,
+  "message": "Error starting trade streaming: Connection failed",
+  "timestamp": "2025-11-03T10:30:00"
 }
 ```
 
-## Мониторинг и логирование
+## Рекомендации по использованию
 
-### Логирование
+### Запуск стримов
 
-Сервис ведет подробные логи:
+1. **Последовательный запуск**: Запускайте стримы последовательно с интервалом 2-3 секунды
+2. **Порядок запуска**: 
+   - Сначала запустите `last-price` (используется для мониторинга лимитов)
+   - Затем `trades` и `minute-candles`
+   - В последнюю очередь `limits` (требует `last-price`)
 
-- Запуск/остановка сервиса
-- Подключение к Tinkoff API
-- Ошибки обработки данных
-- Агрегированная статистика каждые 1000 событий
+### Мониторинг
 
-### Метрики
+- Регулярно проверяйте метрики через `/metrics` endpoints
+- Настройте алерты на высокий процент ошибок (>1%)
+- Используйте `/status` для проверки состояния стримов
 
-Все метрики доступны через `/api/streaming-service/stats`:
+### Кэширование
 
-- Счетчики событий в реальном времени
-- Производительность обработки
-- Статус подключений
-- Использование ресурсов
+- Кэш автоматически прогревается при старте приложения
+- Используйте `/api/cache/warmup` для принудительного обновления
+- Проверяйте статистику кэша через `/api/cache/stats`
+
+### Производительность
+
+- Каждый стрим работает независимо
+- Падение одного стрима не влияет на другие
+- Используйте `/reconnect` при проблемах с соединением
 
 ## Безопасность
 
@@ -287,8 +583,15 @@ if stats:
 - Добавить API ключи
 - Использовать HTTPS
 - Настроить CORS политики
+- Ограничить частоту запросов (rate limiting)
 
 ### Ограничения
 
 - Нет ограничений на частоту запросов
-- Нет валидации входных параметров (не требуется для текущих endpoints)
+- Нет валидации входных параметров (для большинства endpoints)
+
+---
+
+**Версия документации**: 2.0  
+**Последнее обновление**: 2025-11-03  
+**Автор**: Investment Data Stream Service Team

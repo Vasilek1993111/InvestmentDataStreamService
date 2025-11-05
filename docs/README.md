@@ -81,23 +81,31 @@ java -jar target/investment-data-stream-service-1.0.0.jar
 ### Проверка работы
 
 ```bash
-# Статистика сервиса
-curl http://localhost:8084/api/streaming-service/stats
+# Запуск стрима trades
+curl -X POST http://localhost:8084/api/stream/trades/start
 
-# Запуск потоков данных
-curl -X POST http://localhost:8084/api/streaming-service/start
+# Запуск стрима минутных свечей
+curl -X POST http://localhost:8084/api/stream/minute-candles/start
 
-# Проверка здоровья
-curl http://localhost:8084/api/streaming-service/health
+# Запуск стрима цен последних сделок
+curl -X POST http://localhost:8084/api/stream/last-price/start
+
+# Получение метрик стрима trades
+curl http://localhost:8084/api/stream/trades/metrics
+
+# Получение всех акций
+curl http://localhost:8084/api/instruments/shares
 ```
 
 ## Основные возможности
 
 ### 📡 Потоковые данные
 
-- **Сделки (Trades)**: Получение сделок в реальном времени
-- **Свечи (Candles)**: Минутные свечи для всех инструментов
-- **Инструменты**: Акции, фьючерсы, индикативные инструменты
+- **Trade Stream**: Обезличенные сделки в реальном времени (`/api/stream/trades`)
+- **MinuteCandle Stream**: Минутные свечи для всех инструментов (`/api/stream/minute-candles`)
+- **LastPrice Stream**: Цены последних сделок (`/api/stream/last-price`)
+- **Limit Monitoring Stream**: Мониторинг лимитов с уведомлениями в Telegram (`/api/stream/limits`)
+- **Инструменты**: Акции, фьючерсы, индикативные инструменты (`/api/instruments`)
 
 ### 🤖 Telegram Bot
 
@@ -139,24 +147,46 @@ curl http://localhost:8084/api/streaming-service/health
 
 ## Архитектура
 
+Сервис использует модульную архитектуру с независимыми стримами:
+
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  Tinkoff API    │───▶│  Stream Service  │───▶│   PostgreSQL    │
-│  (gRPC Stream)  │    │  (Spring Boot)   │    │   (invest.*)    │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                              │
-                              ▼
-                       ┌──────────────────┐
-                       │   REST API       │
-                       │   (Monitoring)   │
-                       └──────────────────┘
-                              │
-                              ▼
-                       ┌──────────────────┐
-                       │  Telegram Bot    │
-                       │   (Notifications)│
-                       └──────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    Tinkoff Invest API                        │
+│                    (gRPC Streams)                            │
+└──────────────┬───────────────────────────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Investment Data Stream Service                   │
+│                                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │ Trade Stream  │  │ Candle Stream│  │ LastPrice     │      │
+│  │              │  │              │  │ Stream        │      │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
+│         │                 │                  │               │
+│         ▼                 ▼                  ▼               │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              PostgreSQL Database                      │   │
+│  │  invest.trades | invest.minute_candles |              │   │
+│  │  invest.last_prices                                   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │ Limit Monitor│  │ Cache Service│  │ Instrument   │      │
+│  │              │  │              │  │ Service      │      │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
+└─────────┼──────────────────┼──────────────────┼──────────────┘
+          │                  │                  │
+          ▼                  ▼                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│              REST API + Telegram Bot                           │
+│  /api/stream/* | /api/cache/* | /api/instruments/*           │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+Каждый стрим работает независимо и имеет свой контроллер, процессор и таблицу в БД.
+
+Подробнее о новой архитектуре: [NEW_STREAMING_ARCHITECTURE.md](NEW_STREAMING_ARCHITECTURE.md)
 
 ## Конфигурация
 
@@ -224,13 +254,21 @@ spring.datasource.stream.hikari.maximum-pool-size=50
 
 ---
 
-**Версия документации**: 1.2  
-**Последнее обновление**: 2024-01-27  
+**Версия документации**: 2.0  
+**Последнее обновление**: 2025-11-03  
 **Автор**: Investment Data Stream Service Team
 
 ### 🔄 Последние обновления
 
+- ✅ Новая модульная архитектура с независимыми стримами
+- ✅ Отдельные контроллеры для каждого типа стрима (Trade, MinuteCandle, LastPrice, Limits)
+- ✅ Каждый стрим имеет свой процессор и таблицу в БД
 - ✅ Добавлен автоматический cron scheduler для обновления кэша лимитов в 14:00 и 19:00 по рабочим дням
 - ✅ Кэш уведомлений переведен с ConcurrentHashMap на Caffeine Cache
 - ✅ Добавлен кэш `limitsCache` и `notificationsCache` в систему кэширования
-- ✅ Обновлена документация по мониторингу лимитов и кэшированию
+- ✅ Обновлена документация по новой архитектуре и API
+
+### 📚 Дополнительная документация
+
+- **[Новая архитектура стриминга](NEW_STREAMING_ARCHITECTURE.md)** - Подробное описание новой архитектуры
+- **[Архитектурные диаграммы](ARCHITECTURE_DIAGRAM.md)** - Визуализация системы
