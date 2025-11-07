@@ -226,6 +226,7 @@ public class LastPriceStreamingService implements StreamingService<LastPrice> {
             @Override
             public void onError(Throwable t) {
                 log.error("LastPrice stream error", t);
+                metrics.incrementErrors(); // 👈 фиксируем ошибку потока
                 metrics.setConnected(false);
                 scheduleReconnect();
             }
@@ -236,7 +237,8 @@ public class LastPriceStreamingService implements StreamingService<LastPrice> {
                 metrics.setConnected(false);
                 if (isRunning.get()) {
                     scheduleReconnect();
-                }
+    }
+
             }
         };
         
@@ -260,10 +262,15 @@ public class LastPriceStreamingService implements StreamingService<LastPrice> {
      * Обработка данных LastPrice
      */
     private void handleLastPriceData(LastPrice lastPrice) {
+        metrics.incrementReceived(); // 👈 получено новое сообщение
+
         processor.process(lastPrice)
             .whenComplete((result, throwable) -> {
                 if (throwable != null) {
+                    metrics.incrementErrors(); // 👈 ошибка обработки
                     processor.handleError(throwable);
+                } else {
+                    metrics.incrementProcessed(); // 👈 успешно обработано
                 }
             });
     }

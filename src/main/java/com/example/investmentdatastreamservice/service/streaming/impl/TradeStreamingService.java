@@ -226,6 +226,7 @@ public class TradeStreamingService implements StreamingService<Trade> {
             @Override
             public void onError(Throwable t) {
                 log.error("Trade stream error", t);
+                metrics.incrementErrors(); // 👈 фиксируем ошибку
                 metrics.setConnected(false);
                 scheduleReconnect();
             }
@@ -260,10 +261,15 @@ public class TradeStreamingService implements StreamingService<Trade> {
      * Обработка данных Trade
      */
     private void handleTradeData(Trade trade) {
+        metrics.incrementReceived(); // 👈 сообщение получено
+    
         processor.process(trade)
             .whenComplete((result, throwable) -> {
                 if (throwable != null) {
+                    metrics.incrementErrors(); // 👈 ошибка при обработке
                     processor.handleError(throwable);
+                } else {
+                    metrics.incrementProcessed(); // 👈 успешно обработано
                 }
             });
     }

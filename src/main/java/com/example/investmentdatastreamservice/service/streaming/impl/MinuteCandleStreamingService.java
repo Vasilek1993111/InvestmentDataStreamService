@@ -219,10 +219,14 @@ public class MinuteCandleStreamingService implements StreamingService<Candle> {
         StreamObserver<MarketDataResponse> responseObserver = new StreamObserver<>() {
             @Override
             public void onNext(MarketDataResponse response) {
+                metrics.incrementReceived(); // <--- считаем полученные сообщения
+
                 if (response.hasSubscribeCandlesResponse()) {
                     handleSubscriptionResponse(response.getSubscribeCandlesResponse());
                 } else if (response.hasCandle()) {
                     handleCandleData(response.getCandle());
+                } else {
+                    metrics.incrementDropped(); // <--- неизвестный тип ответа
                 }
             }
             
@@ -230,6 +234,7 @@ public class MinuteCandleStreamingService implements StreamingService<Candle> {
             public void onError(Throwable t) {
                 log.error("MinuteCandle stream error", t);
                 metrics.setConnected(false);
+                metrics.incrementErrors(); // <--- можно считать как сетевую ошибку
                 scheduleReconnect();
             }
             
@@ -264,11 +269,14 @@ public class MinuteCandleStreamingService implements StreamingService<Candle> {
      */
     private void handleCandleData(Candle candle) {
         processor.process(candle)
-            .whenComplete((result, throwable) -> {
-                if (throwable != null) {
-                    processor.handleError(throwable);
-                }
-            });
+        .whenComplete((result, throwable) -> {
+            if (throwable != null) {
+                processor.handleError(throwable);
+                metrics.incrementErrors(); // <--- ошибка обработки
+            } else {
+                metrics.incrementProcessed(); // <--- свеча успешно обработана
+            }
+        });
     }
     
     /**
