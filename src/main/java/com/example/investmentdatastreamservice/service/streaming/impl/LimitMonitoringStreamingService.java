@@ -1,18 +1,22 @@
 package com.example.investmentdatastreamservice.service.streaming.impl;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.example.investmentdatastreamservice.repository.FutureRepository;
 import com.example.investmentdatastreamservice.repository.IndicativeRepository;
 import com.example.investmentdatastreamservice.repository.ShareRepository;
 import com.example.investmentdatastreamservice.service.LimitMonitorService;
-import com.example.investmentdatastreamservice.service.streaming.GrpcConnectionManager;
+import com.example.investmentdatastreamservice.service.streaming.MultiStreamManager;
+import com.example.investmentdatastreamservice.service.streaming.SubscriptionBatcher;
 import com.example.investmentdatastreamservice.service.streaming.StreamingMetrics;
 import com.example.investmentdatastreamservice.service.streaming.StreamingService;
 
@@ -33,16 +37,22 @@ import ru.tinkoff.piapi.contract.v1.SubscriptionAction;
  * Специализированный сервис для отслеживания приближения к лимитам инструментов
  * и отправки уведомлений в Telegram при достижении пороговых значений.
  * 
- * <p>
- * Управление подпиской на LastPrice осуществляется через контроллер.
- * </p>
+ * С поддержкой множественных stream-соединений для обхода лимита в 300 подписок.
+ * 
+ * Особенности:
+ * - Разделяет инструменты на батчи по 250 штук
+ * - Создает отдельное gRPC соединение для каждого батча
+ * - Соблюдает rate limit: 100 запросов в минуту
+ * - Автоматическое переподключение при ошибках
  */
 @Service
 public class LimitMonitoringStreamingService implements StreamingService<LastPrice> {
     
     private static final Logger log = LoggerFactory.getLogger(LimitMonitoringStreamingService.class);
     
-    private final GrpcConnectionManager connectionManager;
+    @Value("${tinkoff.api.token}")
+    private String apiToken;
+    
     private final LimitMonitorService limitMonitorService;
     private final ShareRepository shareRepository;
     private final FutureRepository futureRepository;
@@ -50,27 +60,27 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
     
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
     private final StreamingMetrics metrics;
+    private final SubscriptionBatcher batcher;
     
+    // Множественные stream-соединения
+    private MultiStreamManager multiStreamManager;
+    private final AtomicInteger successfulSubscriptions = new AtomicInteger(0);
+    private final AtomicInteger failedSubscriptions = new AtomicInteger(0);
     
     public LimitMonitoringStreamingService(
-            GrpcConnectionManager connectionManager,
             LimitMonitorService limitMonitorService,
             ShareRepository shareRepository,
             FutureRepository futureRepository,
             IndicativeRepository indicativeRepository) {
         
-        this.connectionManager = connectionManager;
         this.limitMonitorService = limitMonitorService;
         this.shareRepository = shareRepository;
         this.futureRepository = futureRepository;
         this.indicativeRepository = indicativeRepository;
         this.metrics = new StreamingMetrics("LimitMonitoringStreamingService");
+        this.batcher = new SubscriptionBatcher(); // 250 инструментов на батч
         
-        log.info("LimitMonitoringStreamingService initialized with GrpcConnectionManager: {}", 
-            System.identityHashCode(connectionManager));
-        
-        // Настраиваем обработчик ответов
-        setupResponseObserver();
+        log.info("LimitMonitoringStreamingService initialized with multi-stream support");
     }
     
     @Override
@@ -81,11 +91,13 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
                 return;
             }
             
-            log.info("🚀 Запуск сервиса мониторинга лимитов...");
+            log.info("🚀 Запуск сервиса мониторинга лимитов с поддержкой множественных stream...");
             log.info("📊 Сервис будет отслеживать приближение к лимитам инструментов");
             log.info("📤 Уведомления будут отправляться в Telegram канал");
             isRunning.set(true);
             metrics.setRunning(true);
+            successfulSubscriptions.set(0);
+            failedSubscriptions.set(0);
             
             try {
                 // Получаем список инструментов
@@ -98,41 +110,103 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
                     return;
                 }
                 
-                log.info("Subscribing to LastPrice for limit monitoring for {} instruments", instruments.size());
+                log.info("📊 Found {} instruments for limit monitoring subscription", instruments.size());
                 
-                // Создаем запрос на подписку
-                SubscribeLastPriceRequest request = SubscribeLastPriceRequest.newBuilder()
-                    .setSubscriptionAction(SubscriptionAction.SUBSCRIPTION_ACTION_SUBSCRIBE)
-                    .addAllInstruments(instruments.stream()
-                        .map(figi -> LastPriceInstrument.newBuilder().setInstrumentId(figi).build())
-                        .toList())
-                    .build();
+                // Разделяем на батчи
+                List<List<String>> batches = batcher.createBatches(instruments);
+                SubscriptionBatcher.BatchInfo batchInfo = batcher.getBatchInfo(instruments);
                 
-                MarketDataRequest marketDataRequest = MarketDataRequest.newBuilder()
-                    .setSubscribeLastPriceRequest(request)
-                    .build();
+                log.info("📦 Created {} batches: {}", batches.size(), batchInfo);
+                log.info("🔗 Each batch will use separate gRPC stream connection");
                 
-                // Подключаемся и отправляем запрос
-                connectionManager.connect()
-                    .thenCompose(v -> connectionManager.sendRequest(marketDataRequest))
+                // Создаем менеджер множественных стримов
+                multiStreamManager = new MultiStreamManager(apiToken, batches.size());
+                
+                // Настраиваем общий response observer для всех стримов
+                setupResponseObserver();
+                
+                // Создаем stream для каждого батча
+                for (int i = 0; i < batches.size(); i++) {
+                    multiStreamManager.createStreamForBatch(i);
+                }
+                
+                // Подключаем все stream'ы
+                multiStreamManager.connectAll()
+                    .thenCompose(v -> {
+                        log.info("✅ All stream connections established");
+                        return subscribeAllBatches(batches);
+                    })
                     .whenComplete((result, throwable) -> {
                         if (throwable != null) {
-                            log.error("Failed to start limit monitoring streaming", throwable);
+                            log.error("❌ Failed to start limit monitoring streaming", throwable);
                             isRunning.set(false);
                             metrics.setRunning(false);
                             scheduleReconnect();
                         } else {
-                            log.info("Limit monitoring streaming service started successfully");
+                            log.info("🎉 Limit monitoring streaming service started successfully");
+                            log.info("📈 Subscribed: {} successful, {} failed", 
+                                successfulSubscriptions.get(), failedSubscriptions.get());
                         }
-                    });
+                    })
+                    .join(); // Ждем завершения подписок
                 
             } catch (Exception e) {
-                log.error("Error starting limit monitoring streaming service", e);
+                log.error("❌ Error starting limit monitoring streaming service", e);
                 isRunning.set(false);
                 metrics.setRunning(false);
                 scheduleReconnect();
             }
         });
+    }
+    
+    /**
+     * Подписывается на все батчи с соблюдением rate limit
+     */
+    private CompletableFuture<Void> subscribeAllBatches(List<List<String>> batches) {
+        log.info("📡 Starting batch subscriptions with rate limiting...");
+        
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        
+        for (int i = 0; i < batches.size(); i++) {
+            final int batchIndex = i;
+            final List<String> batch = batches.get(i);
+            
+            // Задержка между батчами для соблюдения rate limit (100 запросов/мин)
+            long delayMs = i * SubscriptionBatcher.BATCH_DELAY_MS;
+            
+            log.info("📤 Preparing batch {}/{}: {} instruments (delay: {}ms)", 
+                batchIndex + 1, batches.size(), batch.size(), delayMs);
+            
+            // Создаем запрос на подписку для батча
+            SubscribeLastPriceRequest request = SubscribeLastPriceRequest.newBuilder()
+                .setSubscriptionAction(SubscriptionAction.SUBSCRIPTION_ACTION_SUBSCRIBE)
+                .addAllInstruments(batch.stream()
+                    .map(figi -> LastPriceInstrument.newBuilder().setInstrumentId(figi).build())
+                    .toList())
+                .build();
+            
+            MarketDataRequest marketDataRequest = MarketDataRequest.newBuilder()
+                .setSubscribeLastPriceRequest(request)
+                .build();
+            
+            // Отправляем запрос через соответствующий stream с задержкой
+            CompletableFuture<Void> future = multiStreamManager.sendBatchSubscription(
+                batchIndex, marketDataRequest, delayMs)
+                .whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        log.error("❌ Failed to subscribe batch {}/{}", batchIndex + 1, batches.size(), throwable);
+                    } else {
+                        log.info("✅ Batch {}/{} subscription request sent", batchIndex + 1, batches.size());
+                    }
+                });
+            
+            futures.add(future);
+        }
+        
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+            .thenRun(() -> {
+                log.info("✅ All batch subscription requests completed");
+            });
     }
     
     @Override
@@ -143,35 +217,21 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
                 return;
             }
             
-            log.info("Stopping limit monitoring streaming service...");
+            log.info("⏹️ Stopping limit monitoring streaming service...");
             isRunning.set(false);
             metrics.setRunning(false);
             
             try {
-                // Отправляем запрос на отписку
-                List<String> instruments = getAllInstruments();
-                if (!instruments.isEmpty()) {
-                    SubscribeLastPriceRequest unsubscribeRequest = SubscribeLastPriceRequest.newBuilder()
-                        .setSubscriptionAction(SubscriptionAction.SUBSCRIPTION_ACTION_UNSUBSCRIBE)
-                        .addAllInstruments(instruments.stream()
-                            .map(figi -> LastPriceInstrument.newBuilder().setInstrumentId(figi).build())
-                            .toList())
-                        .build();
-                    
-                    MarketDataRequest marketDataRequest = MarketDataRequest.newBuilder()
-                        .setSubscribeLastPriceRequest(unsubscribeRequest)
-                        .build();
-                    
-                    connectionManager.sendRequest(marketDataRequest).join();
+                if (multiStreamManager != null) {
+                    // Отключаем все stream'ы
+                    multiStreamManager.disconnectAll().join();
+                    log.info("✅ All streams disconnected");
                 }
                 
-                // Отключаемся
-                connectionManager.disconnect().join();
-                
-                log.info("Limit monitoring streaming service stopped successfully");
+                log.info("✅ Limit monitoring streaming service stopped successfully");
                 
             } catch (Exception e) {
-                log.error("Error stopping limit monitoring streaming service", e);
+                log.error("❌ Error stopping limit monitoring streaming service", e);
             }
         });
     }
@@ -179,17 +239,22 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
     @Override
     public CompletableFuture<Void> reconnect() {
         return CompletableFuture.runAsync(() -> {
-            log.info("Force reconnecting limit monitoring streaming service...");
+            log.info("🔄 Force reconnecting limit monitoring streaming service...");
             
-            connectionManager.forceReconnect()
-                .thenCompose(v -> start())
-                .whenComplete((result, throwable) -> {
-                    if (throwable != null) {
-                        log.error("Failed to reconnect limit monitoring streaming service", throwable);
-                    } else {
-                        log.info("Limit monitoring streaming service reconnected successfully");
-                    }
-                });
+            if (multiStreamManager != null) {
+                multiStreamManager.forceReconnectAll()
+                    .thenCompose(v -> start())
+                    .whenComplete((result, throwable) -> {
+                        if (throwable != null) {
+                            log.error("❌ Failed to reconnect limit monitoring streaming service", throwable);
+                        } else {
+                            log.info("✅ Limit monitoring streaming service reconnected successfully");
+                        }
+                    });
+            } else {
+                log.warn("MultiStreamManager is null, starting fresh...");
+                start();
+            }
         });
     }
     
@@ -200,7 +265,7 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
     
     @Override
     public boolean isConnected() {
-        return connectionManager.isConnected();
+        return multiStreamManager != null && multiStreamManager.isAllConnected();
     }
     
     @Override
@@ -219,7 +284,7 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
     }
     
     /**
-     * Настройка обработчика ответов от API
+     * Настройка обработчика ответов от API (общий для всех stream'ов)
      */
     private void setupResponseObserver() {
         StreamObserver<MarketDataResponse> responseObserver = new StreamObserver<>() {
@@ -234,7 +299,7 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
             
             @Override
             public void onError(Throwable t) {
-                log.error("Limit monitoring stream error", t);
+                log.error("❌ Limit monitoring stream error", t);
                 metrics.setConnected(false);
                 scheduleReconnect();
             }
@@ -249,7 +314,9 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
             }
         };
         
-        connectionManager.setResponseObserver(responseObserver);
+        if (multiStreamManager != null) {
+            multiStreamManager.setSharedResponseObserver(responseObserver);
+        }
     }
     
     /**
@@ -257,11 +324,29 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
      */
     private void handleSubscriptionResponse(SubscribeLastPriceResponse response) {
         metrics.setConnected(true);
+        
+        int batchSuccessful = 0;
+        int batchFailed = 0;
+        
         log.info("=== LIMIT MONITORING SUBSCRIPTION RESPONSE ===");
-        log.info("Total subscriptions: {}", response.getLastPriceSubscriptionsList().size());
-        response.getLastPriceSubscriptionsList().forEach(subscription -> 
-            log.info("  FIGI {} -> {}", subscription.getFigi(), subscription.getSubscriptionStatus())
-        );
+        log.info("Total subscriptions in response: {}", response.getLastPriceSubscriptionsList().size());
+        
+        for (var subscription : response.getLastPriceSubscriptionsList()) {
+            String status = subscription.getSubscriptionStatus().toString();
+            log.info("  FIGI {} -> {}", subscription.getFigi(), status);
+            
+            if (status.contains("SUCCESS")) {
+                batchSuccessful++;
+                successfulSubscriptions.incrementAndGet();
+            } else {
+                batchFailed++;
+                failedSubscriptions.incrementAndGet();
+            }
+        }
+        
+        log.info("Batch result: {} successful, {} failed", batchSuccessful, batchFailed);
+        log.info("Total result: {} successful, {} failed", 
+            successfulSubscriptions.get(), failedSubscriptions.get());
         log.info("=============================================");
     }
     
@@ -332,10 +417,17 @@ public class LimitMonitoringStreamingService implements StreamingService<LastPri
      */
     private void scheduleReconnect() {
         if (isRunning.get()) {
-            connectionManager.scheduleReconnect(() -> {
-                if (isRunning.get()) {
-                    log.info("Attempting to reconnect limit monitoring streaming service...");
-                    start();
+            log.info("⏰ Scheduling reconnect in 30 seconds...");
+            CompletableFuture.runAsync(() -> {
+                try {
+                    Thread.sleep(30000); // 30 секунд
+                    if (isRunning.get()) {
+                        log.info("🔄 Attempting to reconnect limit monitoring streaming service...");
+                        reconnect();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Reconnect scheduling interrupted");
                 }
             });
         }
