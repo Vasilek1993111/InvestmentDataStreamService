@@ -13,17 +13,17 @@
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │              Investment Data Stream Service                                     │
 │                                                                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │
-│  │ Trade Stream │  │ Candle Stream│  │ LastPrice    │  │ Limit Monitor│        │
-│  │              │  │              │  │ Stream       │  │ Stream       │        │
-│  │ Controller   │  │ Controller   │  │ Controller   │  │ Controller   │        │
-│  │ Processor    │  │ Processor    │  │ Processor    │  │ Monitor      │        │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                         │
+│  │ Candle Stream│  │ LastPrice    │  │ Limit Monitor│                         │
+│  │              │  │ Stream       │  │ Stream       │                         │
+│  │ Controller   │  │ Controller   │  │ Controller   │                         │
+│  │ Processor    │  │ Processor    │  │ Monitor      │                         │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘                         │
 │         │                 │                  │                  │               │
 │         ▼                 ▼                  ▼                  ▼               │
 │  ┌─────────────────────────────────────────────────────────────────────┐       │
 │  │              PostgreSQL Database                                     │       │
-│  │  invest.trades | invest.minute_candles | invest.last_prices         │       │
+│  │  invest.minute_candles | invest.last_prices                        │       │
 │  └─────────────────────────────────────────────────────────────────────┘       │
 │                                                                                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                          │
@@ -63,9 +63,6 @@ Each Stream Controller → GrpcConnectionManager → T-Invest API (gRPC Stream)
 ### 3. **Independent Stream Processing**
 
 ```
-Trade Stream:
-  T-Invest API → TradeStreamingService → TradeProcessor → invest.trades
-
 MinuteCandle Stream:
   T-Invest API → MinuteCandleStreamingService → CandleProcessor → invest.minute_candles
 
@@ -79,7 +76,6 @@ Limit Monitoring Stream:
 ### 4. **Database Storage**
 
 Каждый стрим пишет в свою таблицу:
-- `invest.trades` - обезличенные сделки
 - `invest.minute_candles` - минутные свечи
 - `invest.last_prices` - цены последних сделок
 

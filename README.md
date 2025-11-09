@@ -65,17 +65,14 @@ java -jar target/investment-data-stream-service-*.jar --spring.profiles.active=p
 ### 3. Проверка работы
 
 ```bash
-# Запуск стрима trades
-curl -X POST http://localhost:8084/api/stream/trades/start
-
 # Запуск стрима минутных свечей
 curl -X POST http://localhost:8084/api/stream/minute-candles/start
 
 # Запуск стрима цен последних сделок
 curl -X POST http://localhost:8084/api/stream/last-price/start
 
-# Получение метрик стрима trades
-curl http://localhost:8084/api/stream/trades/metrics
+# Запуск стрима мониторинга лимитов
+curl -X POST http://localhost:8084/api/stream/limits/start
 
 # Получение всех акций
 curl http://localhost:8084/api/instruments/shares

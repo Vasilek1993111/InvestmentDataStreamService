@@ -227,11 +227,9 @@ curl -X POST http://localhost:8080/api/stream/limits/start
 - ❌ `CandleStreamingService` (старый)
 
 ### Новые компоненты
-- ✅ `TradeStreamController`
 - ✅ `MinuteCandleStreamController`
 - ✅ `LastPriceStreamController`
 - ✅ `LimitStreamController`
-- ✅ `TradeStreamingService`
 - ✅ `MinuteCandleStreamingService`
 - ✅ `LastPriceStreamingService`
 - ✅ `CandleProcessor`
@@ -242,7 +240,6 @@ curl -X POST http://localhost:8080/api/stream/limits/start
 ### Изменения в API
 Старый API `/api/streaming-service/*` больше не поддерживается.
 Используйте новые endpoints:
-- `/api/stream/trades/*`
 - `/api/stream/minute-candles/*`
 - `/api/stream/last-price/*`
 - `/api/stream/limits/*`

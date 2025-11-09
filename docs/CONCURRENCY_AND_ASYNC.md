@@ -190,37 +190,6 @@ Semaphore ограничивает количество одновременны
 
 ### Реализация
 
-#### TradeProcessor
-
-```java
-private static final int MAX_CONCURRENT_INSERTS = 200;
-private final Semaphore insertSemaphore = new Semaphore(MAX_CONCURRENT_INSERTS);
-
-private void insertTradeDataAsync(TradeEntity entity) {
-    // Пытаемся получить разрешение на вставку
-    if (!insertSemaphore.tryAcquire()) {
-        // Если все слоты заняты, отбрасываем запись
-        metrics.incrementDropped();
-        log.warn("Too many concurrent inserts, dropping Trade for {}", entity.getId().getFigi());
-        return;
-    }
-    
-    insertExecutor.submit(() -> {
-        try {
-            // Выполняем вставку
-            streamJdbcTemplate.update(sql, params);
-            metrics.incrementProcessed();
-        } catch (Exception e) {
-            metrics.incrementErrors();
-            log.error("Error inserting Trade", e);
-        } finally {
-            // Освобождаем слот
-            insertSemaphore.release();
-        }
-    });
-}
-```
-
 #### LastPriceProcessor
 
 ```java
@@ -229,7 +198,6 @@ private final Semaphore insertSemaphore = new Semaphore(MAX_CONCURRENT_INSERTS);
 ```
 
 **Характеристики**:
-- **Trade**: 200 одновременных вставок
 - **LastPrice**: 100 одновременных вставок
 - **Candle**: 200 одновременных вставок
 
@@ -263,10 +231,9 @@ if (isRunning.get()) {
 ```
 
 **Где используется**:
-- `TradeStreamingService.isRunning`
 - `LastPriceStreamingService.isRunning`
+- `MinuteCandleStreamingService.isRunning`
 - `LimitMonitoringStreamingService.isRunning`
-- `MarketDataStreamingOrchestrator.isInitialized`
 - `GrpcConnectionManager.isConnected`
 
 ### AtomicLong
@@ -285,10 +252,9 @@ totalProcessed.addAndGet(100);
 
 **Где используется**:
 - `StreamingMetrics` - основные метрики
-- `TradeProcessor` - детализированные счетчики (shares, futures, buy, sell)
 - `LastPriceProcessor` - счетчики по типам инструментов
+- `CandleProcessor` - счетчики обработанных свечей
 - `LimitMonitorService` - счетчики алертов и уведомлений
-- `StreamingMetricsManager` - агрегированные счетчики
 
 ### AtomicReference
 
@@ -392,7 +358,6 @@ public CompletableFuture<Void> process(Trade trade) {
 }
 
 // 4. Контролируемая вставка в БД
-private void insertTradeDataAsync(TradeEntity entity) {
     if (!insertSemaphore.tryAcquire()) {
         metrics.incrementDropped();
         return; // Отбрасываем при перегрузке

@@ -5,10 +5,10 @@ import com.example.investmentdatastreamservice.dto.LimitsDto;
 import com.example.investmentdatastreamservice.dto.HistoricalPriceDto;
 import com.example.investmentdatastreamservice.entity.ShareEntity;
 import com.example.investmentdatastreamservice.entity.FutureEntity;
-import com.example.investmentdatastreamservice.entity.TradeEntity;
 import com.example.investmentdatastreamservice.repository.ShareRepository;
 import com.example.investmentdatastreamservice.repository.FutureRepository;
-import com.example.investmentdatastreamservice.repository.TradeRepository;
+import com.example.investmentdatastreamservice.repository.LastPriceRepository;
+import com.example.investmentdatastreamservice.entity.LastPriceEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
@@ -42,7 +42,7 @@ public class LimitMonitorService implements InitializingBean {
     private final TgBotService telegramBotService;
     private final ShareRepository shareRepository;
     private final FutureRepository futureRepository;
-    private final TradeRepository tradeRepository;
+    private final LastPriceRepository lastPriceRepository;
     private final CacheManager cacheManager;
     private final HistoricalPricesService historicalPricesService;
     
@@ -74,14 +74,14 @@ public class LimitMonitorService implements InitializingBean {
             TgBotService telegramBotService,
             ShareRepository shareRepository,
             FutureRepository futureRepository,
-            TradeRepository tradeRepository,
+            LastPriceRepository lastPriceRepository,
             CacheManager cacheManager,
             HistoricalPricesService historicalPricesService) {
         this.limitsService = limitsService;
         this.telegramBotService = telegramBotService;
         this.shareRepository = shareRepository;
         this.futureRepository = futureRepository;
-        this.tradeRepository = tradeRepository;
+        this.lastPriceRepository = lastPriceRepository;
         this.cacheManager = cacheManager;
         this.historicalPricesService = historicalPricesService;
     }
@@ -304,34 +304,30 @@ public class LimitMonitorService implements InitializingBean {
      */
     private BigDecimal getLastClosePrice(String figi, String sessionType) {
         try {
-            // Получаем последние сделки для инструмента
+            // Получаем последние цены для инструмента
             LocalDateTime today = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
             
-            // Для ОС сессии ищем сделки с 9:00 до 18:45
+            // Для ОС сессии ищем цены с 9:00 до 18:45
             if ("OS".equals(sessionType)) {
                 LocalDateTime sessionStart = today.withHour(9).withMinute(0).withSecond(0);
                 LocalDateTime sessionEnd = today.withHour(18).withMinute(45).withSecond(0);
                 
-                return tradeRepository.findByFigiAndDirectionOrderByTimeDesc(figi, "LAST_PRICE")
+                return lastPriceRepository.findByFigiAndTimeBetween(figi, sessionStart, sessionEnd)
                     .stream()
-                    .filter(trade -> trade.getId().getTime().isAfter(sessionStart) && 
-                                   trade.getId().getTime().isBefore(sessionEnd))
                     .findFirst()
-                    .map(TradeEntity::getPrice)
+                    .map(LastPriceEntity::getPrice)
                     .orElse(null);
             }
             
-            // Для вечерней сессии ищем сделки с 19:05 до 23:50
+            // Для вечерней сессии ищем цены с 19:05 до 23:50
             if ("EVENING".equals(sessionType)) {
                 LocalDateTime sessionStart = today.withHour(19).withMinute(5).withSecond(0);
                 LocalDateTime sessionEnd = today.withHour(23).withMinute(50).withSecond(0);
                 
-                return tradeRepository.findByFigiAndDirectionOrderByTimeDesc(figi, "LAST_PRICE")
+                return lastPriceRepository.findByFigiAndTimeBetween(figi, sessionStart, sessionEnd)
                     .stream()
-                    .filter(trade -> trade.getId().getTime().isAfter(sessionStart) && 
-                                   trade.getId().getTime().isBefore(sessionEnd))
                     .findFirst()
-                    .map(TradeEntity::getPrice)
+                    .map(LastPriceEntity::getPrice)
                     .orElse(null);
             }
             

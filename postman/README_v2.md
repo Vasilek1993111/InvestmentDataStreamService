@@ -130,7 +130,6 @@ POST http://localhost:8084/api/stream/trades/start
 {
   "success": true,
   "message": "Trade streaming started successfully",
-  "service": "TradeStreamingService",
   "timestamp": "2025-11-03T10:00:00"
 }
 ```
@@ -144,7 +143,6 @@ GET http://localhost:8084/api/stream/trades/metrics
 **Ответ:**
 ```json
 {
-  "service": "TradeStreamingService",
   "running": true,
   "connected": true,
   "totalReceived": 15000,
@@ -177,7 +175,6 @@ Content-Type: application/json
                  │
 ┌────────────────▼───────────────────┐
 │      Stream Controllers            │
-│  • TradeStreamController           │
 │  • MinuteCandleStreamController    │
 │  • LastPriceStreamController       │
 │  • LimitStreamController           │
@@ -185,7 +182,6 @@ Content-Type: application/json
                  │
 ┌────────────────▼───────────────────┐
 │     Streaming Services             │
-│  • TradeStreamingService           │
 │  • MinuteCandleStreamingService    │
 │  • LastPriceStreamingService       │
 │  • LimitMonitoringStreamingService │
@@ -193,7 +189,6 @@ Content-Type: application/json
                  │
 ┌────────────────▼───────────────────┐
 │         Processors                 │
-│  • TradeProcessor                  │
 │  • CandleProcessor                 │
 │  • LastPriceProcessor              │
 │  • LimitMonitorService             │
@@ -201,7 +196,6 @@ Content-Type: application/json
                  │
 ┌────────────────▼───────────────────┐
 │       PostgreSQL Database          │
-│  • invest.trades                   │
 │  • invest.minute_candles           │
 │  • invest.last_prices              │
 └────────────────────────────────────┘
