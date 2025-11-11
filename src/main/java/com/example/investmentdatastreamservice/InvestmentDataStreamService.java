@@ -1,7 +1,9 @@
 package com.example.investmentdatastreamservice;
 
+import com.example.investmentdatastreamservice.config.LimitMonitorProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 /**
  * Главный класс приложения Investment Data Stream Service
@@ -14,6 +16,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @since 2024
  */
 @SpringBootApplication
+@EnableConfigurationProperties(LimitMonitorProperties.class)
 public class InvestmentDataStreamService {
 
     /**

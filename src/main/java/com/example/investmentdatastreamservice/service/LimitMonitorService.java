@@ -1,5 +1,6 @@
 package com.example.investmentdatastreamservice.service;
 
+import com.example.investmentdatastreamservice.config.LimitMonitorProperties;
 import com.example.investmentdatastreamservice.dto.LimitAlertDto;
 import com.example.investmentdatastreamservice.dto.LimitsDto;
 import com.example.investmentdatastreamservice.dto.HistoricalPriceDto;
@@ -46,6 +47,7 @@ public class LimitMonitorService implements InitializingBean {
     private final LastPriceRepository lastPriceRepository;
     private final CacheManager cacheManager;
     private final HistoricalPricesService historicalPricesService;
+    private final LimitMonitorProperties limitMonitorProperties;
     
     // Счетчики для статистики
     private final AtomicLong totalAlertsProcessed = new AtomicLong(0);
@@ -58,17 +60,15 @@ public class LimitMonitorService implements InitializingBean {
     @Value("${TELEGRAM_LIMIT_CHANNEL_ID}")
     private String telegramChannelId;
     
-    // Порог приближения к лимиту (настраивается через конфигурацию limit.monitor.approach.threshold в процентах)
-    @Value("${limit.monitor.approach.threshold:1.0}")
-    private BigDecimal approachThresholdPercent;
-    
-    // Порог приближения к историческим экстремумам (настраивается через конфигурацию limit.monitor.historical.approach.threshold в процентах)
-    @Value("${limit.monitor.historical.approach.threshold:1.0}")
-    private BigDecimal historicalApproachThresholdPercent;
-    
     // Конвертированные значения в десятичном формате (для расчетов)
-    private BigDecimal approachThreshold;
-    private BigDecimal historicalApproachThreshold;
+    // Используется volatile для потокобезопасности при чтении/записи из разных потоков
+    private volatile BigDecimal approachThreshold;
+    private volatile BigDecimal historicalApproachThreshold;
+    
+    // Значения в процентах (для логирования)
+    // Используется volatile для потокобезопасности при чтении/записи из разных потоков
+    private volatile BigDecimal approachThresholdPercent;
+    private volatile BigDecimal historicalApproachThresholdPercent;
     
     public LimitMonitorService(
             LimitsService limitsService,
@@ -77,7 +77,8 @@ public class LimitMonitorService implements InitializingBean {
             FutureRepository futureRepository,
             LastPriceRepository lastPriceRepository,
             CacheManager cacheManager,
-            HistoricalPricesService historicalPricesService) {
+            HistoricalPricesService historicalPricesService,
+            LimitMonitorProperties limitMonitorProperties) {
         this.limitsService = limitsService;
         this.telegramBotService = telegramBotService;
         this.shareRepository = shareRepository;
@@ -85,6 +86,7 @@ public class LimitMonitorService implements InitializingBean {
         this.lastPriceRepository = lastPriceRepository;
         this.cacheManager = cacheManager;
         this.historicalPricesService = historicalPricesService;
+        this.limitMonitorProperties = limitMonitorProperties;
     }
     
     /**
@@ -92,6 +94,10 @@ public class LimitMonitorService implements InitializingBean {
      */
     @Override
     public void afterPropertiesSet() {
+        // Получаем значения из конфигурационного класса
+        approachThresholdPercent = limitMonitorProperties.getApproach().getThreshold();
+        historicalApproachThresholdPercent = limitMonitorProperties.getHistorical().getApproach().getThreshold();
+        
         // Конвертируем проценты в десятичный формат для расчетов
         approachThreshold = approachThresholdPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
         historicalApproachThreshold = historicalApproachThresholdPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
@@ -183,6 +189,29 @@ public class LimitMonitorService implements InitializingBean {
             String ticker = getTickerByFigi(figi);
             String instrumentName = getInstrumentNameByFigi(figi);
             
+            // Получаем актуальные значения порогов для логирования
+            BigDecimal currentApproachThresholdPercent = approachThresholdPercent != null 
+                ? approachThresholdPercent 
+                : limitMonitorProperties.getApproachThreshold();
+            BigDecimal currentApproachThresholdDecimal = approachThreshold != null 
+                ? approachThreshold 
+                : currentApproachThresholdPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
+            
+            BigDecimal currentHistoricalThresholdPercent = historicalApproachThresholdPercent != null 
+                ? historicalApproachThresholdPercent 
+                : limitMonitorProperties.getHistoricalApproachThreshold();
+            BigDecimal currentHistoricalThresholdDecimal = historicalApproachThreshold != null 
+                ? historicalApproachThreshold 
+                : currentHistoricalThresholdPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
+            
+            // Логируем используемые пороги перед проверкой
+            logger.debug("📊 Используемые пороги для {} ({}): биржевые лимиты={}% (десятичное: {}), исторические экстремумы={}% (десятичное: {})", 
+                       ticker, figi,
+                       currentApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP),
+                       currentApproachThresholdDecimal.setScale(4, RoundingMode.HALF_UP),
+                       currentHistoricalThresholdPercent.setScale(2, RoundingMode.HALF_UP),
+                       currentHistoricalThresholdDecimal.setScale(4, RoundingMode.HALF_UP));
+            
             // Проверяем приближение к верхнему лимиту
             checkLimitApproach(figi, ticker, instrumentName, currentPrice, 
                              limitUp, "UP", eventTime, limits);
@@ -195,11 +224,14 @@ public class LimitMonitorService implements InitializingBean {
             processHistoricalExtremes(figi, ticker, instrumentName, currentPrice, eventTime);
             
             logger.debug("Обработка лимитов для {} ({}): текущая цена={}, порог приближения={}%", 
-                       ticker, figi, currentPrice, approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+                       ticker, figi, currentPrice, currentApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
             
         } catch (Exception e) {
-            logger.error("Ошибка при обработке LAST_PRICE для мониторинга лимитов: {} (порог приближения: {}%)", 
-                        figi, approachThresholdPercent.setScale(2, RoundingMode.HALF_UP), e);
+            String thresholdInfo = approachThresholdPercent != null 
+                ? approachThresholdPercent.setScale(2, RoundingMode.HALF_UP).toString() + "%"
+                : "не установлен";
+            logger.error("Ошибка при обработке LAST_PRICE для мониторинга лимитов: {} (порог приближения: {})", 
+                        figi, thresholdInfo, e);
         }
     }
     
@@ -222,20 +254,36 @@ public class LimitMonitorService implements InitializingBean {
         boolean isLimitReached = isLimitReached(currentPrice, limitPrice, limitType);
         
         // Проверяем, приближается ли к лимиту (порог настраивается через конфигурацию)
-        boolean isApproachingLimit = distanceToLimit.compareTo(approachThreshold) <= 0 && !isLimitReached;
+        // Используем локальную переменную для потокобезопасности
+        BigDecimal currentThreshold = approachThreshold != null ? approachThreshold : 
+            (approachThresholdPercent != null ? approachThresholdPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP) :
+            limitMonitorProperties.getApproachThreshold().divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
+        BigDecimal currentThresholdPercent = approachThresholdPercent != null ? approachThresholdPercent : 
+            limitMonitorProperties.getApproachThreshold();
         
-        // Логируем информацию о проверке лимита
-        logger.debug("Проверка лимита для {} ({}): текущая цена={}, лимит={}, расстояние={}%, порог приближения={}%", 
+        boolean isApproachingLimit = distanceToLimit.compareTo(currentThreshold) <= 0 && !isLimitReached;
+        
+        // Логируем информацию о проверке лимита с указанием используемого порога
+        logger.debug("Проверка лимита для {} ({}): текущая цена={}, лимит={}, расстояние={}%, используемый порог приближения={}% (десятичное значение: {})", 
                     ticker, limitType, currentPrice, limitPrice, 
                     distanceToLimitPercent.setScale(2, RoundingMode.HALF_UP),
-                    approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+                    currentThresholdPercent.setScale(2, RoundingMode.HALF_UP),
+                    currentThreshold);
+        
+        // Логируем сравнение расстояния с порогом
+        logger.trace("Сравнение расстояния до лимита: расстояние={}% (десятичное: {}), порог={}% (десятичное: {}), результат={}", 
+                    distanceToLimitPercent.setScale(4, RoundingMode.HALF_UP),
+                    distanceToLimit.setScale(4, RoundingMode.HALF_UP),
+                    currentThresholdPercent.setScale(4, RoundingMode.HALF_UP),
+                    currentThreshold.setScale(4, RoundingMode.HALF_UP),
+                    isApproachingLimit ? "ПРИБЛИЖАЕТСЯ" : "НЕ ПРИБЛИЖАЕТСЯ");
         
         // Приоритет: сначала проверяем достижение лимита, затем приближение
         if (isLimitReached) {
             // Инструмент достиг лимита - отправляем уведомление о достижении
             logger.info("🚨 Лимит {} достигнут для {} ({}): цена={}, лимит={}, порог приближения={}%", 
                        limitType, ticker, figi, currentPrice, limitPrice,
-                       approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+                       currentThresholdPercent.setScale(2, RoundingMode.HALF_UP));
             sendLimitReachedNotification(figi, ticker, instrumentName, currentPrice, 
                                        limitPrice, limitType, eventTime, limits, distanceToLimit);
         } else if (isApproachingLimit) {
@@ -243,7 +291,7 @@ public class LimitMonitorService implements InitializingBean {
             logger.info("⚠️ Приближение к лимиту {} для {} ({}): расстояние={}%, порог={}%", 
                        limitType, ticker, figi, 
                        distanceToLimitPercent.setScale(2, RoundingMode.HALF_UP),
-                       approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+                       currentThresholdPercent.setScale(2, RoundingMode.HALF_UP));
             sendApproachingLimitNotification(figi, ticker, instrumentName, currentPrice, 
                                            limitPrice, limitType, eventTime, limits, distanceToLimit);
         }
@@ -665,20 +713,36 @@ public class LimitMonitorService implements InitializingBean {
         boolean isLimitReached = isLimitReached(currentPrice, extremePrice, limitType);
         
         // Проверяем, приближается ли к экстремуму
-        boolean isApproachingLimit = distanceToLimit.compareTo(historicalApproachThreshold) <= 0 && !isLimitReached;
+        // Используем локальную переменную для потокобезопасности
+        BigDecimal currentHistoricalThreshold = historicalApproachThreshold != null ? historicalApproachThreshold : 
+            (historicalApproachThresholdPercent != null ? historicalApproachThresholdPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP) :
+            limitMonitorProperties.getHistoricalApproachThreshold().divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
+        BigDecimal currentHistoricalThresholdPercent = historicalApproachThresholdPercent != null ? historicalApproachThresholdPercent : 
+            limitMonitorProperties.getHistoricalApproachThreshold();
         
-        // Логируем информацию о проверке исторического экстремума
-        logger.debug("Проверка исторического экстремума {} для {} ({}): текущая цена={}, экстремум={}, расстояние={}%, порог приближения={}%", 
+        boolean isApproachingLimit = distanceToLimit.compareTo(currentHistoricalThreshold) <= 0 && !isLimitReached;
+        
+        // Логируем информацию о проверке исторического экстремума с указанием используемого порога
+        logger.debug("Проверка исторического экстремума {} для {} ({}): текущая цена={}, экстремум={}, расстояние={}%, используемый порог приближения={}% (десятичное значение: {})", 
                     limitType, ticker, figi, currentPrice, extremePrice, 
                     distanceToLimitPercent.setScale(2, RoundingMode.HALF_UP),
-                    historicalApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+                    currentHistoricalThresholdPercent.setScale(2, RoundingMode.HALF_UP),
+                    currentHistoricalThreshold);
+        
+        // Логируем сравнение расстояния с порогом
+        logger.trace("Сравнение расстояния до исторического экстремума: расстояние={}% (десятичное: {}), порог={}% (десятичное: {}), результат={}", 
+                    distanceToLimitPercent.setScale(4, RoundingMode.HALF_UP),
+                    distanceToLimit.setScale(4, RoundingMode.HALF_UP),
+                    currentHistoricalThresholdPercent.setScale(4, RoundingMode.HALF_UP),
+                    currentHistoricalThreshold.setScale(4, RoundingMode.HALF_UP),
+                    isApproachingLimit ? "ПРИБЛИЖАЕТСЯ" : "НЕ ПРИБЛИЖАЕТСЯ");
         
         // Приоритет: сначала проверяем достижение экстремума, затем приближение
         if (isLimitReached) {
             // Инструмент достиг исторического экстремума - отправляем уведомление о достижении
             logger.info("🏆 Исторический экстремум {} достигнут для {} ({}): цена={}, экстремум={}, порог приближения={}%", 
                        limitType, ticker, figi, currentPrice, extremePrice,
-                       historicalApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+                       currentHistoricalThresholdPercent.setScale(2, RoundingMode.HALF_UP));
             sendHistoricalExtremeReachedNotification(figi, ticker, instrumentName, currentPrice, 
                                                    extremePrice, limitType, eventTime, extremeDate, 
                                                    historicalPrice, distanceToLimit);
@@ -687,7 +751,7 @@ public class LimitMonitorService implements InitializingBean {
             logger.info("📈 Приближение к историческому экстремуму {} для {} ({}): расстояние={}%, порог={}%", 
                        limitType, ticker, figi, 
                        distanceToLimitPercent.setScale(2, RoundingMode.HALF_UP),
-                       historicalApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+                       currentHistoricalThresholdPercent.setScale(2, RoundingMode.HALF_UP));
             sendHistoricalExtremeApproachingNotification(figi, ticker, instrumentName, currentPrice, 
                                                         extremePrice, limitType, eventTime, extremeDate, 
                                                         historicalPrice, distanceToLimit);
@@ -793,10 +857,121 @@ public class LimitMonitorService implements InitializingBean {
             "historicalExtremeReachedAlerts", historicalExtremeReachedAlerts.get(),
             "notificationsSent", notificationsSent.get(),
             "dailyNotificationsCount", notificationsCacheSize,
-            "telegramChannelConfigured", telegramChannelId != null && !telegramChannelId.trim().isEmpty()
+            "telegramChannelConfigured", telegramChannelId != null && !telegramChannelId.trim().isEmpty(),
+            "approachThresholdPercent", approachThresholdPercent != null ? approachThresholdPercent.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO,
+            "historicalApproachThresholdPercent", historicalApproachThresholdPercent != null ? historicalApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO
         );
     }
-
+    
+    /**
+     * Обновляет порог приближения к биржевым лимитам
+     * 
+     * @param threshold новый порог в процентах (например, 1.0 = 1%)
+     * @throws IllegalArgumentException если значение некорректно
+     */
+    public void updateApproachThreshold(BigDecimal threshold) {
+        try {
+            // Сохраняем старое значение для логирования
+            BigDecimal oldThresholdPercent = approachThresholdPercent != null ? approachThresholdPercent : limitMonitorProperties.getApproachThreshold();
+            BigDecimal oldThreshold = approachThreshold != null ? approachThreshold : oldThresholdPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
+            
+            // Обновляем значение в конфигурации
+            limitMonitorProperties.setApproachThreshold(threshold);
+            
+            // Синхронизируем внутренние значения
+            approachThresholdPercent = threshold;
+            approachThreshold = threshold.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
+            
+            logger.info("✅ Порог приближения к биржевым лимитам обновлен:");
+            logger.info("   Старое значение: {}% (десятичное: {})", 
+                       oldThresholdPercent.setScale(2, RoundingMode.HALF_UP), 
+                       oldThreshold.setScale(4, RoundingMode.HALF_UP));
+            logger.info("   Новое значение: {}% (десятичное: {})", 
+                       threshold.setScale(2, RoundingMode.HALF_UP), 
+                       approachThreshold.setScale(4, RoundingMode.HALF_UP));
+            logger.info("   Изменение: {}%", 
+                       threshold.subtract(oldThresholdPercent).setScale(2, RoundingMode.HALF_UP));
+        } catch (IllegalArgumentException e) {
+            logger.error("❌ Ошибка при обновлении порога приближения к биржевым лимитам: {}", e.getMessage());
+            throw e;
+        }
+    }
+    
+    /**
+     * Обновляет порог приближения к историческим экстремумам
+     * 
+     * @param threshold новый порог в процентах (например, 1.0 = 1%)
+     * @throws IllegalArgumentException если значение некорректно
+     */
+    public void updateHistoricalApproachThreshold(BigDecimal threshold) {
+        try {
+            // Сохраняем старое значение для логирования
+            BigDecimal oldThresholdPercent = historicalApproachThresholdPercent != null ? historicalApproachThresholdPercent : limitMonitorProperties.getHistoricalApproachThreshold();
+            BigDecimal oldThreshold = historicalApproachThreshold != null ? historicalApproachThreshold : oldThresholdPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
+            
+            // Обновляем значение в конфигурации
+            limitMonitorProperties.setHistoricalApproachThreshold(threshold);
+            
+            // Синхронизируем внутренние значения
+            historicalApproachThresholdPercent = threshold;
+            historicalApproachThreshold = threshold.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
+            
+            logger.info("✅ Порог приближения к историческим экстремумам обновлен:");
+            logger.info("   Старое значение: {}% (десятичное: {})", 
+                       oldThresholdPercent.setScale(2, RoundingMode.HALF_UP), 
+                       oldThreshold.setScale(4, RoundingMode.HALF_UP));
+            logger.info("   Новое значение: {}% (десятичное: {})", 
+                       threshold.setScale(2, RoundingMode.HALF_UP), 
+                       historicalApproachThreshold.setScale(4, RoundingMode.HALF_UP));
+            logger.info("   Изменение: {}%", 
+                       threshold.subtract(oldThresholdPercent).setScale(2, RoundingMode.HALF_UP));
+        } catch (IllegalArgumentException e) {
+            logger.error("❌ Ошибка при обновлении порога приближения к историческим экстремумам: {}", e.getMessage());
+            throw e;
+        }
+    }
+    
+    /**
+     * Получает текущий порог приближения к биржевым лимитам
+     * 
+     * @return порог в процентах
+     */
+    public BigDecimal getApproachThreshold() {
+        BigDecimal threshold = approachThresholdPercent != null ? approachThresholdPercent : limitMonitorProperties.getApproachThreshold();
+        logger.trace("Получение порога биржевых лимитов: {}% (десятичное: {})", 
+                    threshold.setScale(2, RoundingMode.HALF_UP),
+                    (approachThreshold != null ? approachThreshold : threshold.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP)).setScale(4, RoundingMode.HALF_UP));
+        return threshold;
+    }
+    
+    /**
+     * Получает текущий порог приближения к историческим экстремумам
+     * 
+     * @return порог в процентах
+     */
+    public BigDecimal getHistoricalApproachThreshold() {
+        BigDecimal threshold = historicalApproachThresholdPercent != null ? historicalApproachThresholdPercent : limitMonitorProperties.getHistoricalApproachThreshold();
+        logger.trace("Получение порога исторических экстремумов: {}% (десятичное: {})", 
+                    threshold.setScale(2, RoundingMode.HALF_UP),
+                    (historicalApproachThreshold != null ? historicalApproachThreshold : threshold.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP)).setScale(4, RoundingMode.HALF_UP));
+        return threshold;
+    }
+    
+    /**
+     * Синхронизирует внутренние значения порогов с конфигурацией
+     * Вызывается при необходимости обновить значения из конфигурации
+     */
+    public void syncThresholdsFromConfig() {
+        approachThresholdPercent = limitMonitorProperties.getApproachThreshold();
+        historicalApproachThresholdPercent = limitMonitorProperties.getHistoricalApproachThreshold();
+        
+        approachThreshold = approachThresholdPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
+        historicalApproachThreshold = historicalApproachThresholdPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
+        
+        logger.info("🔄 Пороги синхронизированы с конфигурацией: биржевые={}%, исторические={}%", 
+                   approachThresholdPercent.setScale(2, RoundingMode.HALF_UP),
+                   historicalApproachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+    }
 
     
 }
