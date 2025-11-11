@@ -1,5 +1,8 @@
 package com.example.investmentdatastreamservice.controller;
 
+import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -424,6 +427,14 @@ public class InstrumentController {
      * </p>
      * 
      * <p>
+     * Лимиты выбираются в зависимости от дня недели:
+     * <ul>
+     * <li>Рабочие дни (пн-пт): используются биржевые лимиты (limitDown, limitUp)</li>
+     * <li>Выходные дни (сб-вс): используются лимиты для внебиржевых торгов (limitDownOverExchangeTrades, limitUpOverExchangeTrades)</li>
+     * </ul>
+     * </p>
+     * 
+     * <p>
      * <strong>Пример запроса:</strong>
      * </p>
      * 
@@ -432,7 +443,7 @@ public class InstrumentController {
      * </pre>
      * 
      * @param figi FIGI инструмента
-     * @return лимиты инструмента из кэша
+     * @return лимиты инструмента из кэша с актуальными значениями в зависимости от дня недели
      */
     @GetMapping("/limits/{figi}")
     public ResponseEntity<Map<String, Object>> getLimitsByFigi(@PathVariable String figi) {
@@ -442,9 +453,40 @@ public class InstrumentController {
             
             Map<String, Object> response = new HashMap<>();
             if (limits != null) {
+                // Определяем день недели и выбираем актуальные лимиты
+                DayOfWeek dayOfWeek = LocalDate.now().getDayOfWeek();
+                boolean isWeekend = dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY;
+                
+                BigDecimal actualLimitDown;
+                BigDecimal actualLimitUp;
+                
+                if (isWeekend) {
+                    actualLimitDown = limits.getLimitDownOverExchangeTrades();
+                    actualLimitUp = limits.getLimitUpOverExchangeTrades();
+                } else {
+                    actualLimitDown = limits.getLimitDown();
+                    actualLimitUp = limits.getLimitUp();
+                }
+                
+                // Формируем полный ответ с актуальными лимитами
+                Map<String, Object> limitsData = new HashMap<>();
+                limitsData.put("limitDown", limits.getLimitDown());
+                limitsData.put("limitUp", limits.getLimitUp());
+                limitsData.put("limitDownOverExchangeTrades", limits.getLimitDownOverExchangeTrades());
+                limitsData.put("limitUpOverExchangeTrades", limits.getLimitUpOverExchangeTrades());
+                limitsData.put("closePrice", limits.getClosePrice());
+                
+                // Актуальные лимиты для текущего дня недели
+                Map<String, Object> actualLimits = new HashMap<>();
+                actualLimits.put("limitDown", actualLimitDown);
+                actualLimits.put("limitUp", actualLimitUp);
+                actualLimits.put("isWeekend", isWeekend);
+                actualLimits.put("dayOfWeek", dayOfWeek.toString());
+                
                 response.put("success", true);
                 response.put("figi", figi);
-                response.put("data", limits);
+                response.put("data", limitsData);
+                response.put("actualLimits", actualLimits);
                 response.put("fromCache", true);
             } else {
                 response.put("success", false);
@@ -472,6 +514,14 @@ public class InstrumentController {
      * </p>
      * 
      * <p>
+     * Лимиты выбираются в зависимости от дня недели:
+     * <ul>
+     * <li>Рабочие дни (пн-пт): используются биржевые лимиты (limitDown, limitUp)</li>
+     * <li>Выходные дни (сб-вс): используются лимиты для внебиржевых торгов (limitDownOverExchangeTrades, limitUpOverExchangeTrades)</li>
+     * </ul>
+     * </p>
+     * 
+     * <p>
      * <strong>Пример запроса:</strong>
      * </p>
      * 
@@ -479,7 +529,7 @@ public class InstrumentController {
      * GET /api/instruments/limits/shares
      * </pre>
      * 
-     * @return лимиты для всех акций из кэша
+     * @return лимиты для всех акций из кэша с актуальными значениями в зависимости от дня недели
      */
     @GetMapping("/limits/shares")
     public ResponseEntity<Map<String, Object>> getSharesLimits() {
@@ -488,6 +538,10 @@ public class InstrumentController {
             List<ShareEntity> shares = cacheWarmupService.getAllShares();
             List<ShareDto> shareDtos = shareMapper.toDtoList(shares);
             
+            // Определяем день недели для выбора актуальных лимитов
+            DayOfWeek dayOfWeek = LocalDate.now().getDayOfWeek();
+            boolean isWeekend = dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY;
+            
             List<Map<String, Object>> limitsList = new java.util.ArrayList<>();
             
             for (ShareDto share : shareDtos) {
@@ -495,12 +549,31 @@ public class InstrumentController {
                     // Получаем лимиты ТОЛЬКО из кэша (без запроса к API)
                     LimitsDto limits = limitsService.getLimitsFromCache(share.getFigi());
                     if (limits != null) {
+                        // Выбираем актуальные лимиты в зависимости от дня недели
+                        BigDecimal actualLimitDown;
+                        BigDecimal actualLimitUp;
+                        
+                        if (isWeekend) {
+                            actualLimitDown = limits.getLimitDownOverExchangeTrades();
+                            actualLimitUp = limits.getLimitUpOverExchangeTrades();
+                        } else {
+                            actualLimitDown = limits.getLimitDown();
+                            actualLimitUp = limits.getLimitUp();
+                        }
+                        
                         Map<String, Object> limitData = new HashMap<>();
                         limitData.put("figi", share.getFigi());
                         limitData.put("ticker", share.getTicker());
                         limitData.put("name", share.getName());
+                        // Все доступные лимиты
                         limitData.put("limitDown", limits.getLimitDown());
                         limitData.put("limitUp", limits.getLimitUp());
+                        limitData.put("limitDownOverExchangeTrades", limits.getLimitDownOverExchangeTrades());
+                        limitData.put("limitUpOverExchangeTrades", limits.getLimitUpOverExchangeTrades());
+                        limitData.put("closePrice", limits.getClosePrice());
+                        // Актуальные лимиты для текущего дня недели
+                        limitData.put("actualLimitDown", actualLimitDown);
+                        limitData.put("actualLimitUp", actualLimitUp);
                         limitsList.add(limitData);
                     }
                 }
@@ -509,6 +582,8 @@ public class InstrumentController {
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("count", limitsList.size());
+            response.put("dayOfWeek", dayOfWeek.toString());
+            response.put("isWeekend", isWeekend);
             response.put("data", limitsList);
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             
@@ -531,6 +606,14 @@ public class InstrumentController {
      * </p>
      * 
      * <p>
+     * Лимиты выбираются в зависимости от дня недели:
+     * <ul>
+     * <li>Рабочие дни (пн-пт): используются биржевые лимиты (limitDown, limitUp)</li>
+     * <li>Выходные дни (сб-вс): используются лимиты для внебиржевых торгов (limitDownOverExchangeTrades, limitUpOverExchangeTrades)</li>
+     * </ul>
+     * </p>
+     * 
+     * <p>
      * <strong>Пример запроса:</strong>
      * </p>
      * 
@@ -538,7 +621,7 @@ public class InstrumentController {
      * GET /api/instruments/limits/futures
      * </pre>
      * 
-     * @return лимиты для всех фьючерсов из кэша
+     * @return лимиты для всех фьючерсов из кэша с актуальными значениями в зависимости от дня недели
      */
     @GetMapping("/limits/futures")
     public ResponseEntity<Map<String, Object>> getFuturesLimits() {
@@ -547,6 +630,10 @@ public class InstrumentController {
             List<FutureEntity> futures = cacheWarmupService.getAllFutures();
             List<FutureDto> futureDtos = futureMapper.toDtoList(futures);
             
+            // Определяем день недели для выбора актуальных лимитов
+            DayOfWeek dayOfWeek = LocalDate.now().getDayOfWeek();
+            boolean isWeekend = dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY;
+            
             List<Map<String, Object>> limitsList = new java.util.ArrayList<>();
             
             for (FutureDto future : futureDtos) {
@@ -554,12 +641,31 @@ public class InstrumentController {
                     // Получаем лимиты ТОЛЬКО из кэша (без запроса к API)
                     LimitsDto limits = limitsService.getLimitsFromCache(future.getFigi());
                     if (limits != null) {
+                        // Выбираем актуальные лимиты в зависимости от дня недели
+                        BigDecimal actualLimitDown;
+                        BigDecimal actualLimitUp;
+                        
+                        if (isWeekend) {
+                            actualLimitDown = limits.getLimitDownOverExchangeTrades();
+                            actualLimitUp = limits.getLimitUpOverExchangeTrades();
+                        } else {
+                            actualLimitDown = limits.getLimitDown();
+                            actualLimitUp = limits.getLimitUp();
+                        }
+                        
                         Map<String, Object> limitData = new HashMap<>();
                         limitData.put("figi", future.getFigi());
                         limitData.put("ticker", future.getTicker());
                         limitData.put("basicAsset", future.getBasicAsset());
+                        // Все доступные лимиты
                         limitData.put("limitDown", limits.getLimitDown());
                         limitData.put("limitUp", limits.getLimitUp());
+                        limitData.put("limitDownOverExchangeTrades", limits.getLimitDownOverExchangeTrades());
+                        limitData.put("limitUpOverExchangeTrades", limits.getLimitUpOverExchangeTrades());
+                        limitData.put("closePrice", limits.getClosePrice());
+                        // Актуальные лимиты для текущего дня недели
+                        limitData.put("actualLimitDown", actualLimitDown);
+                        limitData.put("actualLimitUp", actualLimitUp);
                         limitsList.add(limitData);
                     }
                 }
@@ -568,6 +674,8 @@ public class InstrumentController {
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("count", limitsList.size());
+            response.put("dayOfWeek", dayOfWeek.toString());
+            response.put("isWeekend", isWeekend);
             response.put("data", limitsList);
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             
