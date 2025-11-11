@@ -15,4 +15,7 @@ public class LimitsDto {
     private String instrumentId;
     private BigDecimal limitDown;
     private BigDecimal limitUp;
+    private BigDecimal closePrice;
+    private BigDecimal limitDownOverExchangeTrades;
+    private BigDecimal limitUpOverExchangeTrades;
 }

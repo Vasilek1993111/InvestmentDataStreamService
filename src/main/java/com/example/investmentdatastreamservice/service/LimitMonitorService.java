@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -120,6 +121,34 @@ public class LimitMonitorService implements InitializingBean {
     }
     
     /**
+     * Получение актуальных лимитов для текущего дня недели
+     * 
+     * @param limits объект с лимитами
+     * @return массив из двух элементов: [limitDown, limitUp]
+     */
+    private BigDecimal[] getActualLimits(LimitsDto limits) {
+        DayOfWeek dayOfWeek = LocalDate.now().getDayOfWeek();
+        boolean isWeekend = dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY;
+        
+        BigDecimal limitDown;
+        BigDecimal limitUp;
+        
+        if (isWeekend) {
+            // Выходные дни - используем лимиты для внебиржевых торгов
+            limitDown = limits.getLimitDownOverExchangeTrades();
+            limitUp = limits.getLimitUpOverExchangeTrades();
+            logger.debug("Используются лимиты для ВЫХОДНЫХ дней: limitDown={}, limitUp={}", limitDown, limitUp);
+        } else {
+            // Рабочие дни (пн-пт) - используем обычные биржевые лимиты
+            limitDown = limits.getLimitDown();
+            limitUp = limits.getLimitUp();
+            logger.debug("Используются лимиты для РАБОЧИХ дней: limitDown={}, limitUp={}", limitDown, limitUp);
+        }
+        
+        return new BigDecimal[]{limitDown, limitUp};
+    }
+    
+    /**
      * Обработка данных LAST_PRICE для мониторинга лимитов
      * 
      * @param figi FIGI инструмента
@@ -132,8 +161,20 @@ public class LimitMonitorService implements InitializingBean {
             
             // Получаем лимиты для инструмента
             LimitsDto limits = limitsService.getLimitsFromCache(figi);
-            if (limits == null || limits.getLimitUp() == null || limits.getLimitDown() == null) {
+            if (limits == null) {
                 logger.debug("Лимиты не найдены для инструмента: {} (порог приближения: {}%)", 
+                           figi, approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
+                return;
+            }
+            
+            // Получаем актуальные лимиты для текущего дня недели
+            BigDecimal[] actualLimits = getActualLimits(limits);
+            BigDecimal limitDown = actualLimits[0];
+            BigDecimal limitUp = actualLimits[1];
+            
+            // Проверяем, что лимиты определены
+            if (limitUp == null || limitDown == null) {
+                logger.debug("Лимиты не определены для инструмента: {} (порог приближения: {}%)", 
                            figi, approachThresholdPercent.setScale(2, RoundingMode.HALF_UP));
                 return;
             }
@@ -144,11 +185,11 @@ public class LimitMonitorService implements InitializingBean {
             
             // Проверяем приближение к верхнему лимиту
             checkLimitApproach(figi, ticker, instrumentName, currentPrice, 
-                             limits.getLimitUp(), "UP", eventTime, limits);
+                             limitUp, "UP", eventTime, limits);
             
             // Проверяем приближение к нижнему лимиту
             checkLimitApproach(figi, ticker, instrumentName, currentPrice, 
-                             limits.getLimitDown(), "DOWN", eventTime, limits);
+                             limitDown, "DOWN", eventTime, limits);
             
             // Проверяем исторические экстремумы
             processHistoricalExtremes(figi, ticker, instrumentName, currentPrice, eventTime);
@@ -219,6 +260,11 @@ public class LimitMonitorService implements InitializingBean {
         BigDecimal closePriceOs = getLastClosePrice(figi, "OS");
         BigDecimal closePriceEvening = getLastClosePrice(figi, "EVENING");
         
+        // Получаем актуальные лимиты для текущего дня недели
+        BigDecimal[] actualLimits = getActualLimits(limits);
+        BigDecimal limitDown = actualLimits[0];
+        BigDecimal limitUp = actualLimits[1];
+        
         // Создаем DTO для уведомления о достижении лимита
         LimitAlertDto alert = LimitAlertDto.builder()
             .figi(figi)
@@ -228,8 +274,8 @@ public class LimitMonitorService implements InitializingBean {
             .currentPrice(currentPrice)
             .limitPrice(limitPrice)
             .limitType(limitType)
-            .limitDown(limits.getLimitDown())
-            .limitUp(limits.getLimitUp())
+            .limitDown(limitDown)
+            .limitUp(limitUp)
             .closePriceOs(closePriceOs)
             .closePriceEvening(closePriceEvening)
             .distanceToLimit(distanceToLimit.multiply(new BigDecimal("100"))) // В процентах
@@ -253,6 +299,11 @@ public class LimitMonitorService implements InitializingBean {
         BigDecimal closePriceOs = getLastClosePrice(figi, "OS");
         BigDecimal closePriceEvening = getLastClosePrice(figi, "EVENING");
         
+        // Получаем актуальные лимиты для текущего дня недели
+        BigDecimal[] actualLimits = getActualLimits(limits);
+        BigDecimal limitDown = actualLimits[0];
+        BigDecimal limitUp = actualLimits[1];
+        
         // Создаем DTO для уведомления о приближении к лимиту
         LimitAlertDto alert = LimitAlertDto.builder()
             .figi(figi)
@@ -262,8 +313,8 @@ public class LimitMonitorService implements InitializingBean {
             .currentPrice(currentPrice)
             .limitPrice(limitPrice)
             .limitType(limitType)
-            .limitDown(limits.getLimitDown())
-            .limitUp(limits.getLimitUp())
+            .limitDown(limitDown)
+            .limitUp(limitUp)
             .closePriceOs(closePriceOs)
             .closePriceEvening(closePriceEvening)
             .distanceToLimit(distanceToLimit.multiply(new BigDecimal("100"))) // В процентах

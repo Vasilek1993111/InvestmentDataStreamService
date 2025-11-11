@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.example.investmentdatastreamservice.dto.LimitsDto;
 import com.example.investmentdatastreamservice.utils.QuotationUtils;
+import com.google.protobuf.Timestamp;
 import com.example.investmentdatastreamservice.repository.ShareRepository;
 import com.example.investmentdatastreamservice.repository.FutureRepository;
 import com.example.investmentdatastreamservice.entity.ShareEntity;
@@ -18,7 +19,9 @@ import com.example.investmentdatastreamservice.entity.FutureEntity;
 import ru.tinkoff.piapi.core.MarketDataService;
 import ru.tinkoff.piapi.contract.v1.GetOrderBookResponse;
 import ru.tinkoff.piapi.contract.v1.Quotation;
-
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
@@ -53,25 +56,46 @@ public class LimitsService {
         try {
             if (marketDataService == null) {
                 logger.error("MarketDataService не инициализирован. Проверьте конфигурацию Tinkoff API.");
-                return new LimitsDto(instrumentId, null, null);
+                return new LimitsDto(instrumentId, null, null, null, null, null);
             }
             
             GetOrderBookResponse limitsResponse = marketDataService.getOrderBook(instrumentId, 1).join();
-            logger.info("Получен ответ OrderBook для инструмента {}: hasLimitUp={}, hasLimitDown={}",
-                    instrumentId, limitsResponse.hasLimitUp(), limitsResponse.hasLimitDown());
 
-            if (limitsResponse.hasLimitUp() && limitsResponse.hasLimitDown()) {
+            // Получаем protobuf Timestamp из GetOrderBookResponse
+            Timestamp closePriceTs = limitsResponse.getClosePriceTs();
+            
+            String dateString = null;
+            if (closePriceTs != null) {
+                // Конвертируем protobuf Timestamp в Instant, затем в LocalDate
+                Instant instant = Instant.ofEpochSecond(
+                    closePriceTs.getSeconds(), 
+                    closePriceTs.getNanos()
+                );
+                dateString = instant
+                    .atZone(ZoneId.of("Europe/Moscow"))
+                    .toLocalDate()
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            }
+            logger.info("Получен ответ OrderBook для инструмента {}: hasLimitUp={}, hasLimitDown={}, closePriceDate={}, closePrice={}",
+                    instrumentId, limitsResponse.hasLimitUp(), limitsResponse.hasLimitDown(), dateString, QuotationUtils.toBigDecimal(limitsResponse.getClosePrice()));
+
+            if (limitsResponse.hasLimitUp() && limitsResponse.hasLimitDown()) { 
                 Quotation limitUp = limitsResponse.getLimitUp();
                 Quotation limitDown = limitsResponse.getLimitDown();
+                Quotation closePrice = limitsResponse.getClosePrice();
 
                 BigDecimal limitDownDecimal = QuotationUtils.toBigDecimal(limitDown);
                 BigDecimal limitUpDecimal = QuotationUtils.toBigDecimal(limitUp);
+                BigDecimal closePriceDecimal = QuotationUtils.toBigDecimal(closePrice);
 
-                LimitsDto limits = new LimitsDto(instrumentId, limitDownDecimal, limitUpDecimal);
+                BigDecimal limitUpOverExchangeTrades = closePriceDecimal.add(closePriceDecimal.multiply(BigDecimal.valueOf(0.05)));
+                BigDecimal limitDownOverExchangeTrades = closePriceDecimal.subtract(closePriceDecimal.multiply(BigDecimal.valueOf(0.05)));
+
+                LimitsDto limits = new LimitsDto(instrumentId, limitDownDecimal, limitUpDecimal, closePriceDecimal, limitDownOverExchangeTrades, limitUpOverExchangeTrades);
                 
                 logger.info(
-                        "✅ Лимиты для инструмента {}: limitDown={}, limitUp={} - БУДЕТ СОХРАНЕНО В КЭШ",
-                        instrumentId, limitDownDecimal, limitUpDecimal);
+                        "✅ Лимиты для инструмента {}: limitDown={}, limitUp={}, limitDownOverExchangeTrades={}, limitUpOverExchangeTrades={} - БУДЕТ СОХРАНЕНО В КЭШ",
+                        instrumentId, limitDownDecimal, limitUpDecimal, limitDownOverExchangeTrades, limitUpOverExchangeTrades);
 
                 return limits;
             } else {
@@ -88,7 +112,7 @@ public class LimitsService {
             }
         }
         logger.warn("❌ Возвращаем пустой список лимитов для инструмента {}", instrumentId);
-        return new LimitsDto(instrumentId, null, null);
+        return new LimitsDto(instrumentId, null, null, null, null, null);
     }
 
 
