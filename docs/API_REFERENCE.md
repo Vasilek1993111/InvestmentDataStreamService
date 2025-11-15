@@ -37,6 +37,7 @@ http://localhost:8084
 - **MinuteCandle Stream** - минутные свечи (`/api/stream/minute-candles`)
 - **LastPrice Stream** - цены последних сделок (`/api/stream/last-price`)
 - **Limit Monitoring Stream** - мониторинг лимитов (`/api/stream/limits`)
+- **Limit Monitor Management** - управление настройками мониторинга (`/api/limit-monitor`)
 - **Cache Management** - управление кэшем (`/api/cache`)
 - **Instruments** - работа с инструментами (`/api/instruments`)
 
@@ -378,6 +379,107 @@ DELETE /api/cache/clear?cacheName=sharesCache
 
 Возвращает статистику кэша лимитов.
 
+### Limit Monitor Management (`/api/limit-monitor`)
+
+**GET** `/api/limit-monitor/thresholds`
+
+Возвращает текущие пороги мониторинга лимитов.
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "approachThreshold": 1.0,
+  "historicalApproachThreshold": 1.0,
+  "timestamp": "2025-11-03T10:30:00"
+}
+```
+
+**POST** `/api/limit-monitor/thresholds/approach`
+
+Обновляет порог приближения к биржевым лимитам.
+
+**Тело запроса:**
+```json
+{
+  "threshold": 2.0
+}
+```
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "message": "Порог приближения к биржевым лимитам успешно обновлен и синхронизирован",
+  "threshold": 2.0,
+  "timestamp": "2025-11-03T10:30:00"
+}
+```
+
+**POST** `/api/limit-monitor/thresholds/historical`
+
+Обновляет порог приближения к историческим экстремумам.
+
+**Тело запроса:**
+```json
+{
+  "threshold": 1.5
+}
+```
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "message": "Порог приближения к историческим экстремумам успешно обновлен и синхронизирован",
+  "threshold": 1.5,
+  "timestamp": "2025-11-03T10:30:00"
+}
+```
+
+**POST** `/api/limit-monitor/thresholds`
+
+Обновляет оба порога одновременно.
+
+**Тело запроса:**
+```json
+{
+  "approachThreshold": 2.0,
+  "historicalApproachThreshold": 1.5
+}
+```
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "message": "Пороги успешно обновлены и синхронизированы",
+  "updated": {
+    "approachThreshold": 2.0,
+    "historicalApproachThreshold": 1.5
+  },
+  "timestamp": "2025-11-03T10:30:00"
+}
+```
+
+**GET** `/api/limit-monitor/statistics`
+
+Возвращает статистику мониторинга лимитов.
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "data": {
+    "totalAlerts": 150,
+    "limitUpAlerts": 80,
+    "limitDownAlerts": 70,
+    "historicalExtremesAlerts": 30
+  },
+  "timestamp": "2025-11-03T10:30:00"
+}
+```
+
 ## Примеры использования
 
 ### cURL
@@ -400,6 +502,17 @@ curl -X POST http://localhost:8084/api/cache/warmup
 
 # Статистика кэша
 curl http://localhost:8084/api/cache/stats
+
+# Получение порогов мониторинга лимитов
+curl http://localhost:8084/api/limit-monitor/thresholds
+
+# Обновление порога приближения к лимитам
+curl -X POST http://localhost:8084/api/limit-monitor/thresholds/approach \
+  -H "Content-Type: application/json" \
+  -d '{"threshold": 2.0}'
+
+# Статистика мониторинга лимитов
+curl http://localhost:8084/api/limit-monitor/statistics
 ```
 
 ### PowerShell
@@ -416,7 +529,19 @@ Invoke-RestMethod -Uri "http://localhost:8084/api/instruments/shares" -Method GE
 
 # Поиск инструментов
 Invoke-RestMethod -Uri "http://localhost:8084/api/instruments/search?q=SBER" -Method GET
+
+# Получение порогов мониторинга лимитов
+Invoke-RestMethod -Uri "http://localhost:8084/api/limit-monitor/thresholds" -Method GET
+
+# Обновление порога приближения к лимитам
+$body = @{ threshold = 2.0 } | ConvertTo-Json
+Invoke-RestMethod -Uri "http://localhost:8084/api/limit-monitor/thresholds/approach" -Method POST -Body $body -ContentType "application/json"
+
+# Статистика мониторинга лимитов
+Invoke-RestMethod -Uri "http://localhost:8084/api/limit-monitor/statistics" -Method GET
 ```
+<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
+read_file
 
 ### JavaScript (Node.js)
 
@@ -468,7 +593,45 @@ async function searchInstruments(query) {
     console.error("Error:", error.message);
   }
 }
+
+// Получение порогов мониторинга лимитов
+async function getLimitMonitorThresholds() {
+  try {
+    const response = await axios.get(`${BASE_URL}/api/limit-monitor/thresholds`);
+    console.log(`Approach threshold: ${response.data.approachThreshold}%`);
+    console.log(`Historical threshold: ${response.data.historicalApproachThreshold}%`);
+    return response.data;
+  } catch (error) {
+    console.error("Error:", error.message);
+  }
+}
+
+// Обновление порога приближения к лимитам
+async function updateApproachThreshold(threshold) {
+  try {
+    const response = await axios.post(`${BASE_URL}/api/limit-monitor/thresholds/approach`, {
+      threshold: threshold
+    });
+    console.log(response.data.message);
+    return response.data;
+  } catch (error) {
+    console.error("Error:", error.message);
+  }
+}
+
+// Статистика мониторинга лимитов
+async function getLimitMonitorStatistics() {
+  try {
+    const response = await axios.get(`${BASE_URL}/api/limit-monitor/statistics`);
+    console.log(`Total alerts: ${response.data.data.totalAlerts}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error:", error.message);
+  }
+}
 ```
+<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
+read_file
 
 ### Python
 
@@ -520,6 +683,46 @@ def search_instruments(query):
         response.raise_for_status()
         data = response.json()
         print(f"Found {data['totalCount']} instruments")
+        return data
+    except requests.exceptions.RequestException as e:
+        print(f"Error: {e}")
+        return None
+
+# Получение порогов мониторинга лимитов
+def get_limit_monitor_thresholds():
+    try:
+        response = requests.get(f"{BASE_URL}/api/limit-monitor/thresholds")
+        response.raise_for_status()
+        data = response.json()
+        print(f"Approach threshold: {data['approachThreshold']}%")
+        print(f"Historical threshold: {data['historicalApproachThreshold']}%")
+        return data
+    except requests.exceptions.RequestException as e:
+        print(f"Error: {e}")
+        return None
+
+# Обновление порога приближения к лимитам
+def update_approach_threshold(threshold):
+    try:
+        response = requests.post(
+            f"{BASE_URL}/api/limit-monitor/thresholds/approach",
+            json={"threshold": threshold}
+        )
+        response.raise_for_status()
+        data = response.json()
+        print(data['message'])
+        return data
+    except requests.exceptions.RequestException as e:
+        print(f"Error: {e}")
+        return None
+
+# Статистика мониторинга лимитов
+def get_limit_monitor_statistics():
+    try:
+        response = requests.get(f"{BASE_URL}/api/limit-monitor/statistics")
+        response.raise_for_status()
+        data = response.json()
+        print(f"Total alerts: {data['data']['totalAlerts']}")
         return data
     except requests.exceptions.RequestException as e:
         print(f"Error: {e}")
@@ -592,6 +795,6 @@ def search_instruments(query):
 
 ---
 
-**Версия документации**: 2.0  
-**Последнее обновление**: 2025-11-03  
+**Версия документации**: 2.1  
+**Последнее обновление**: 2025-11-10  
 **Автор**: Investment Data Stream Service Team

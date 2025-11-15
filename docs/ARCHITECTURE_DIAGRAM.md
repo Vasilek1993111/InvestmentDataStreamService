@@ -42,7 +42,7 @@
 │              REST API                                                           │
 │  /api/stream/trades/* | /api/stream/minute-candles/* |                         │
 │  /api/stream/last-price/* | /api/stream/limits/* |                            │
-│  /api/cache/* | /api/instruments/*                                             │
+│  /api/limit-monitor/* | /api/cache/* | /api/instruments/*                     │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -165,6 +165,7 @@ Limit Monitoring Stream:
 - `MinuteCandleStreamController` - `/api/stream/minute-candles/*`
 - `LastPriceStreamController` - `/api/stream/last-price/*`
 - `LimitStreamController` - `/api/stream/limits/*`
+- `LimitMonitorController` - `/api/limit-monitor/*`
 - `CacheController` - `/api/cache/*`
 - `InstrumentController` - `/api/instruments/*`
 
