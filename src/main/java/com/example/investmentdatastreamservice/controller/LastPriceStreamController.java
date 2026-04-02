@@ -51,7 +51,7 @@ public class LastPriceStreamController {
         } catch (Exception e) {
             Map<String, Object> response = Map.of(
                 "success", false,
-                "message", "Error starting last price streaming: " + e.getMessage(),
+                "message", "Error starting last price streaming",
                 "timestamp", java.time.LocalDateTime.now().toString()
             );
             return ResponseEntity.status(500).body(response);
@@ -77,7 +77,7 @@ public class LastPriceStreamController {
         } catch (Exception e) {
             Map<String, Object> response = Map.of(
                 "success", false,
-                "message", "Error stopping last price streaming: " + e.getMessage(),
+                "message", "Error stopping last price streaming",
                 "timestamp", java.time.LocalDateTime.now().toString()
             );
             return ResponseEntity.status(500).body(response);
@@ -103,7 +103,7 @@ public class LastPriceStreamController {
         } catch (Exception e) {
             Map<String, Object> response = Map.of(
                 "success", false,
-                "message", "Error reconnecting last price streaming: " + e.getMessage(),
+                "message", "Error reconnecting last price streaming",
                 "timestamp", java.time.LocalDateTime.now().toString()
             );
             return ResponseEntity.status(500).body(response);

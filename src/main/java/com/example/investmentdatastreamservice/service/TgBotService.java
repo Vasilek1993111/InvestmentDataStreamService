@@ -36,7 +36,8 @@ public class TgBotService extends TelegramLongPollingBot {
             logger.info("╠════════════════════════════════════════════════════════════╣");
             logger.info("║ Bot Username: {}", botUsername != null ? botUsername : "NOT SET");
             logger.info("║ Bot Token: {}", botToken != null ? "***SET***" : "NOT SET");
-            logger.info("║ Limit Channel ID: {}", limitChannelId != null && !limitChannelId.trim().isEmpty() ? limitChannelId : "NOT SET");
+            logger.info("║ Limit Channel ID configured: {}",
+                    limitChannelId != null && !limitChannelId.trim().isEmpty() ? "YES" : "NO");
             logger.info("║ Status: {}", botToken != null && botUsername != null ? "READY" : "NOT READY");
             logger.info("╚════════════════════════════════════════════════════════════╝");
             isInitialized = true;
@@ -69,9 +70,9 @@ public class TgBotService extends TelegramLongPollingBot {
         String chatId = update.getMessage().getChatId().toString();
         String text = update.getMessage().getText();
 
-        logger.info("📨 Received message from user: {} (ID: {}) in chat: {}", 
-                user.getFirstName(), user.getId(), chatId);
-        logger.info("💬 Message text: {}", text);
+        logger.info("📨 Received message from Telegram user in configured bot chat");
+        logger.debug("Telegram update metadata: userId={}, chatId={}, hasCommand={}",
+                user.getId(), chatId, text.startsWith("/"));
 
         // Обработка команд
         if (text.startsWith("/")) {
@@ -116,17 +117,17 @@ public class TgBotService extends TelegramLongPollingBot {
 
     public void sendText(String chatId, String text) {
         try {
-            logger.info("📤 Попытка отправки сообщения в Telegram чат: {}", chatId);
-            logger.debug("📝 Содержимое сообщения: {}", text);
+            logger.info("📤 Sending message to configured Telegram destination");
+            logger.debug("Telegram message length: {}", text != null ? text.length() : 0);
             
             SendMessage message = new SendMessage();
             message.setChatId(chatId);
             message.setText(text);
             execute(message);
             
-            logger.info("✅ Сообщение успешно отправлено в Telegram чат: {}", chatId);
+            logger.info("✅ Telegram message sent successfully");
         } catch (TelegramApiException e) {
-            logger.error("❌ Ошибка при отправке сообщения в Telegram чат {}: {}", chatId, e.getMessage(), e);
+            logger.error("❌ Ошибка при отправке сообщения в Telegram", e);
             
             // Дополнительная информация об ошибке
             if (e.getMessage().contains("chat not found")) {

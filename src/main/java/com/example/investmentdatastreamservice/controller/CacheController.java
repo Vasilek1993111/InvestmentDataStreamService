@@ -105,7 +105,7 @@ public class CacheController {
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("message", "Ошибка при прогреве кэша: " + e.getMessage());
+            response.put("message", "Ошибка при прогреве кэша");
             response.put("timestamp", LocalDateTime.now().toString());
 
             return ResponseEntity.status(500).body(response);
@@ -183,7 +183,7 @@ public class CacheController {
 
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
-            response.put("error", "Ошибка при получении содержимого кэша: " + e.getMessage());
+            response.put("error", "Ошибка при получении содержимого кэша");
             response.put("timestamp", LocalDateTime.now().toString());
 
             return ResponseEntity.status(500).body(response);
@@ -263,7 +263,7 @@ public class CacheController {
 
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
-            response.put("error", "Ошибка при получении статистики кэша: " + e.getMessage());
+            response.put("error", "Ошибка при получении статистики кэша");
             response.put("timestamp", LocalDateTime.now().toString());
 
             return ResponseEntity.status(500).body(response);
@@ -333,7 +333,7 @@ public class CacheController {
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при очистке кэша: " + e.getMessage());
+            response.put("error", "Ошибка при очистке кэша");
             response.put("timestamp", LocalDateTime.now().toString());
 
             return ResponseEntity.status(500).body(response);
@@ -413,7 +413,7 @@ public class CacheController {
             info.put("sampleLimit", Math.min(limit, entryCount));
 
         } catch (Exception e) {
-            info.put("error", "Ошибка при получении информации о кэше: " + e.getMessage());
+            info.put("error", "Ошибка при получении информации о кэше");
         }
 
         return info;

@@ -121,8 +121,7 @@ public class GrpcConfig {
     @Bean
     public InvestApi investApi() {
         logger.info("=== CREATING INVEST API ===");
-        logger.info("Token loaded from Spring properties: {}", token != null && token.length() > 4 ? 
-            token.substring(0, 4) + "***" : "NULL");
+        logger.info("Tinkoff API token configured: {}", token != null && !token.trim().isEmpty() && !"your-token-here".equals(token));
         
         if (token == null || token.trim().isEmpty() || "your-token-here".equals(token)) {
             logger.error("Tinkoff API token is not properly configured!");

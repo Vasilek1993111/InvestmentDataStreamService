@@ -63,7 +63,7 @@ public class LimitMonitorController {
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при получении порогов: " + e.getMessage());
+            response.put("error", "Не удалось получить текущие пороги");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -125,7 +125,7 @@ public class LimitMonitorController {
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при обновлении порога: " + e.getMessage());
+            response.put("error", "Не удалось обновить порог");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -187,7 +187,7 @@ public class LimitMonitorController {
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при обновлении порога: " + e.getMessage());
+            response.put("error", "Не удалось обновить порог");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -258,7 +258,7 @@ public class LimitMonitorController {
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при обновлении порогов: " + e.getMessage());
+            response.put("error", "Не удалось обновить пороги");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -291,7 +291,7 @@ public class LimitMonitorController {
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при получении статистики: " + e.getMessage());
+            response.put("error", "Не удалось получить статистику мониторинга");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }

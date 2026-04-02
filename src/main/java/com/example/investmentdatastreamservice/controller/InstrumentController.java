@@ -7,6 +7,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -49,6 +51,8 @@ import com.example.investmentdatastreamservice.service.LimitsService;
 @RestController
 @RequestMapping("/api/instruments")
 public class InstrumentController {
+
+    private static final Logger logger = LoggerFactory.getLogger(InstrumentController.class);
 
     private final CacheWarmupService cacheWarmupService;
     private final ShareMapper shareMapper;
@@ -97,9 +101,10 @@ public class InstrumentController {
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            logger.error("Ошибка при получении акций", e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при получении акций: " + e.getMessage());
+            response.put("error", "Ошибка при получении акций");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -140,9 +145,10 @@ public class InstrumentController {
                 return ResponseEntity.status(404).body(response);
             }
         } catch (Exception e) {
+            logger.error("Ошибка при получении акции по FIGI {}", figi, e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при получении акции: " + e.getMessage());
+            response.put("error", "Ошибка при получении акции");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -179,9 +185,10 @@ public class InstrumentController {
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            logger.error("Ошибка при получении фьючерсов", e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при получении фьючерсов: " + e.getMessage());
+            response.put("error", "Ошибка при получении фьючерсов");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -222,9 +229,10 @@ public class InstrumentController {
                 return ResponseEntity.status(404).body(response);
             }
         } catch (Exception e) {
+            logger.error("Ошибка при получении фьючерса по FIGI {}", figi, e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при получении фьючерса: " + e.getMessage());
+            response.put("error", "Ошибка при получении фьючерса");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -261,10 +269,10 @@ public class InstrumentController {
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            logger.error("Ошибка при получении индикативных инструментов", e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error",
-                    "Ошибка при получении индикативных инструментов: " + e.getMessage());
+            response.put("error", "Ошибка при получении индикативных инструментов");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -305,10 +313,10 @@ public class InstrumentController {
                 return ResponseEntity.status(404).body(response);
             }
         } catch (Exception e) {
+            logger.error("Ошибка при получении индикативного инструмента по FIGI {}", figi, e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error",
-                    "Ошибка при получении индикативного инструмента: " + e.getMessage());
+            response.put("error", "Ошибка при получении индикативного инструмента");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -368,9 +376,10 @@ public class InstrumentController {
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            logger.error("Ошибка при поиске инструментов по запросу {}", q, e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при поиске инструментов: " + e.getMessage());
+            response.put("error", "Ошибка при поиске инструментов");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -410,9 +419,10 @@ public class InstrumentController {
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            logger.error("Ошибка при получении статистики инструментов", e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при получении статистики: " + e.getMessage());
+            response.put("error", "Ошибка при получении статистики");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -497,9 +507,10 @@ public class InstrumentController {
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            logger.error("Ошибка при получении лимитов для FIGI {}", figi, e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при получении лимитов для инструмента '" + figi + "': " + e.getMessage());
+            response.put("error", "Ошибка при получении лимитов для инструмента");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -589,9 +600,10 @@ public class InstrumentController {
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            logger.error("Ошибка при получении лимитов акций", e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при получении лимитов акций: " + e.getMessage());
+            response.put("error", "Ошибка при получении лимитов акций");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -681,9 +693,10 @@ public class InstrumentController {
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            logger.error("Ошибка при получении лимитов фьючерсов", e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при получении лимитов фьючерсов: " + e.getMessage());
+            response.put("error", "Ошибка при получении лимитов фьючерсов");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -768,9 +781,10 @@ public class InstrumentController {
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            logger.error("Ошибка при получении статистики лимитов", e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при получении статистики лимитов: " + e.getMessage());
+            response.put("error", "Ошибка при получении статистики лимитов");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }
@@ -808,9 +822,10 @@ public class InstrumentController {
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            logger.error("Ошибка при получении статистики кэша лимитов", e);
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
-            response.put("error", "Ошибка при получении статистики кэша: " + e.getMessage());
+            response.put("error", "Ошибка при получении статистики кэша");
             response.put("timestamp", java.time.LocalDateTime.now().toString());
             return ResponseEntity.status(500).body(response);
         }

@@ -51,7 +51,7 @@ public class LimitStreamController {
         } catch (Exception e) {
             Map<String, Object> response = Map.of(
                 "success", false,
-                "message", "Error starting limit monitoring streaming: " + e.getMessage(),
+                "message", "Error starting limit monitoring streaming",
                 "timestamp", java.time.LocalDateTime.now().toString()
             );
             return ResponseEntity.status(500).body(response);
@@ -77,7 +77,7 @@ public class LimitStreamController {
         } catch (Exception e) {
             Map<String, Object> response = Map.of(
                 "success", false,
-                "message", "Error stopping limit monitoring streaming: " + e.getMessage(),
+                "message", "Error stopping limit monitoring streaming",
                 "timestamp", java.time.LocalDateTime.now().toString()
             );
             return ResponseEntity.status(500).body(response);
@@ -103,7 +103,7 @@ public class LimitStreamController {
         } catch (Exception e) {
             Map<String, Object> response = Map.of(
                 "success", false,
-                "message", "Error reconnecting limit monitoring streaming: " + e.getMessage(),
+                "message", "Error reconnecting limit monitoring streaming",
                 "timestamp", java.time.LocalDateTime.now().toString()
             );
             return ResponseEntity.status(500).body(response);

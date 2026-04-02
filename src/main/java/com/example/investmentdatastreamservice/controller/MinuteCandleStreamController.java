@@ -51,7 +51,7 @@ public class MinuteCandleStreamController {
         } catch (Exception e) {
             Map<String, Object> response = Map.of(
                 "success", false,
-                "message", "Error starting minute candle streaming: " + e.getMessage(),
+                "message", "Error starting minute candle streaming",
                 "timestamp", java.time.LocalDateTime.now().toString()
             );
             return ResponseEntity.status(500).body(response);
@@ -77,7 +77,7 @@ public class MinuteCandleStreamController {
         } catch (Exception e) {
             Map<String, Object> response = Map.of(
                 "success", false,
-                "message", "Error stopping minute candle streaming: " + e.getMessage(),
+                "message", "Error stopping minute candle streaming",
                 "timestamp", java.time.LocalDateTime.now().toString()
             );
             return ResponseEntity.status(500).body(response);
@@ -103,7 +103,7 @@ public class MinuteCandleStreamController {
         } catch (Exception e) {
             Map<String, Object> response = Map.of(
                 "success", false,
-                "message", "Error reconnecting minute candle streaming: " + e.getMessage(),
+                "message", "Error reconnecting minute candle streaming",
                 "timestamp", java.time.LocalDateTime.now().toString()
             );
             return ResponseEntity.status(500).body(response);

@@ -57,26 +57,20 @@ public class EnvironmentInitializer implements ApplicationContextInitializer<Con
             logger.info("✅ Loaded environment variables from: {}", envFile);
             logger.info("🔧 Loaded {} environment variables", envProperties.size());
             
-            // Дополнительное логирование для отладки
-            if (envProperties.containsKey("T_INVEST_TEST_TOKEN")) {
-                String token = envProperties.get("T_INVEST_TEST_TOKEN").toString();
-                logger.info("🔑 T_INVEST_TEST_TOKEN found: {}", 
-                    token.length() > 4 ? token.substring(0, 4) + "***" : "***");
-            } else {
-                logger.warn("❌ T_INVEST_TEST_TOKEN not found in {}", envFile);
+            if (!envProperties.containsKey("T_INVEST_TEST_TOKEN")
+                    && !envProperties.containsKey("T_INVEST_PROD_TOKEN")) {
+                logger.warn("T-Invest API token was not found in {}", envFile);
             }
 
-            if (envProperties.containsKey("SPRING_DATASOURCE_TEST_USERNAME")) {
-                logger.info("🔑 SPRING_DATASOURCE_TEST_USERNAME found: {}", 
-                    envProperties.get("SPRING_DATASOURCE_TEST_USERNAME"));
-            } else {
-                logger.warn("❌ SPRING_DATASOURCE_TEST_USERNAME not found in {}", envFile);
+            if (!envProperties.containsKey("SPRING_DATASOURCE_TEST_USERNAME")
+                    && !envProperties.containsKey("SPRING_DATASOURCE_PROD_USERNAME")) {
+                logger.warn("Datasource username was not found in {}", envFile);
             }
 
         } catch (Exception e) {
             logger.warn("⚠️  Warning: Could not load {} - using default values", envFile);
             logger.warn("💡 Create {} file based on {}.example", envFile, envFile);
-            logger.warn("Error details: {}", e.getMessage());
+            logger.debug("Failed to load environment file {}", envFile, e);
         }
 
         logger.info("=== ENVIRONMENT LOADING COMPLETED ===");
